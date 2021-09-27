@@ -1,0 +1,23 @@
+<Container>:
+    orientation: 'vertical'
+
+    Button:
+        text:'Press me'
+        size_hint: (.5, .5)
+        pos_hint:{'center_x': .5, 'center_y': .5}
+        on_press: app.on_press_button()
+
+    BoxLayout:
+        orientation: 'horizontal'
+        padding: 10
+        spacing: 10
+        size_hint_y: .05
+
+        Button:
+            text: 'Добавить'
+            on_press: root.test()
+
+        Button:
+            text: 'Second'
+            background_color: 'yellow'
+
