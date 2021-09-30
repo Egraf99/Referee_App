@@ -1,23 +1,66 @@
-<Container>:
+<GameScreen>:
     orientation: 'vertical'
 
-    Button:
-        text:'Press me'
-        size_hint: (.5, .5)
-        pos_hint:{'center_x': .5, 'center_y': .5}
-        on_press: app.on_press_button()
+    label: label
+    button_f: bn_finance
+    button_m: bn_main
+    button_a: bn_appointment
 
     BoxLayout:
-        orientation: 'horizontal'
-        padding: 10
-        spacing: 10
-        size_hint_y: .05
-
+        size_hint_y: .1
         Button:
-            text: 'Добавить'
-            on_press: root.test()
+            text: 'Press me'
 
-        Button:
-            text: 'Second'
-            background_color: 'yellow'
+    BoxLayout:
+        Label:
+            id: label
+            text: 'Main field'
+
+
+    BoxLayout:
+        size_hint_y: .1
+        ToggleButton:
+            id: bn_finance
+            text: 'finance'
+            group: 'menu'
+            on_press: root.test('fin')
+
+        ToggleButton:
+            id: bn_main
+            text: 'main'
+            group: 'menu'
+            state: 'down'
+            on_press: root.test('main')
+
+        ToggleButton:
+            id: bn_appointment
+            text: 'appointment'
+            group: 'menu'
+            on_press: root.test('app')
+
+#<AppointmentScreen>:
+#
+#
+#
+#<FinanceScreen>:
+
+#    Button:
+#        text:'Press me'
+#        size_hint: (.5, .5)
+#        pos_hint:{'center_x': .5, 'center_y': .5}
+#        on_press: app.on_press_button()
+#
+#    BoxLayout:
+#        orientation: 'horizontal'
+#        padding: 10
+#        spacing: 10
+#        size_hint_y: .05
+#
+#        Button:
+#            text: 'Добавить'
+#            on_press: root.test()
+#
+#        Button:
+#            text: 'Second'
+#            background_color: 'yellow'
 
