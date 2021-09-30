@@ -1,18 +1,16 @@
 from kivy.app import App
 from kivy.uix.boxlayout import BoxLayout
-from kivy.uix.floatlayout import FloatLayout
-
-red = [1, 0, 0, 1]
-green = [0, 1, 0, 1]
-blue = [0, 0, 1, 1]
-purple = [1, 0, 1, 1]
+from kivy.uix.label import Label
+from kivy.uix.screenmanager import ScreenManager, Screen
 
 
 class GameScreen(BoxLayout):
-    def test(self, text):
-        print('ok')
+    def change_label(self, text):
         self.label.text = text
 
+    def add_label(self):
+        self.main_box.clear_widgets()
+        self.main_box.add_widget(Label(text='New'))
 
 class MainApp(App):
     def build(self):
