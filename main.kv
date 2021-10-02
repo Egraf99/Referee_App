@@ -1,6 +1,8 @@
 <GameScreen>:
+    top_bn: top_bn
     label: label
-    main_box: main_box
+    content_box: content_box
+    buttons: [bn_appointment, bn_main, bn_finance]
     BoxLayout:
         orientation: 'vertical'
 
@@ -8,10 +10,11 @@
         BoxLayout:
             size_hint_y: .1
             Button:
+                id: top_bn
                 text: 'Press me'
 
         BoxLayout:
-            id: main_box
+            id: content_box
             Image:
                 source: 'image/second.jpg'
             Label:
@@ -25,64 +28,21 @@
                 id: bn_finance
                 text: 'finance'
                 group: 'menu'
-                on_press: root.change_label('fin')
+                on_press: root.main_page(self)
 
             ToggleButton:
                 id: bn_main
                 text: 'main'
                 group: 'menu'
                 state: 'down'
-                on_press: root.add_label()
+                on_press: root.add_label(self)
+
 
             ToggleButton:
                 id: bn_appointment
                 text: 'appointment'
                 group: 'menu'
-                on_press: root.change_label('app')
-
-<AppointmentScreen>:
-
-    label: label
-    button_f: bn_finance
-    button_m: bn_main
-    button_a: bn_appointment
-    BoxLayout:
-        orientation: 'vertical'
-
-
-        BoxLayout:
-            size_hint_y: .1
-            Button:
-                text: 'Press me'
-
-        BoxLayout:
-            Image:
-                source: 'image/first.jpg'
-            Label:
-                id: label
-                text: 'Main field'
-
-
-        BoxLayout:
-            size_hint_y: .1
-            ToggleButton:
-                id: bn_finance
-                text: 'finance'
-                group: 'menu'
-                on_press: root.test()
-
-            ToggleButton:
-                id: bn_main
-                text: 'main'
-                group: 'menu'
-                state: 'down'
-                on_press: root.test()
-
-            ToggleButton:
-                id: bn_appointment
-                text: 'appointment'
-                group: 'menu'
-                on_press: root.test()
+                on_press: root.change_label(self, 'app')
 
 
 #<FinanceScreen>:
