@@ -2,7 +2,7 @@
     top_bn: top_bn
     label: label
     content_box: content_box
-    buttons: [bn_appointment, bn_main, bn_finance]
+#    buttons: [bn_appointment, bn_main, bn_finance]
     BoxLayout:
         orientation: 'vertical'
 
@@ -21,49 +21,57 @@
                 id: label
                 text: 'Main field'
 
+        MDBottomNavigation:
+            panel_color: .2, .2, .2, .1
 
-        BoxLayout:
-            size_hint_y: .1
-            ToggleButton:
-                id: bn_finance
-                text: 'finance'
-                group: 'menu'
-                on_press: root.main_page(self)
+            MDBottomNavigationItem:
+                name: 'main'
+                text: 'Game'
+                icon: 'language-python'
 
-            ToggleButton:
-                id: bn_main
-                text: 'main'
-                group: 'menu'
-                state: 'down'
-                on_press: root.main_page(self)
+                MDLabel:
+                    text: 'Game'
+                    halign: 'center'
+
+            MDBottomNavigationItem:
+                name: 'screen2'
+                text: 'Finance'
+                icon: 'language-python'
+
+                MDLabel:
+                    text: 'Finance'
+                    halign: 'center'
+
+            MDBottomNavigationItem:
+                name: 'scree 3'
+                text: 'JS'
+                icon: 'language-javascript'
+
+                MDLabel:
+                    text: 'JS'
+                    halign: 'center'
 
 
-            ToggleButton:
-                id: bn_appointment
-                text: 'appointment'
-                group: 'menu'
-                on_press: root.main_page(self)
-
-
-#<FinanceScreen>:
-
-#    Button:
-#        text:'Press me'
-#        size_hint: (.5, .5)
-#        pos_hint:{'center_x': .5, 'center_y': .5}
-#        on_press: app.on_press_button()
+#        BoxLayout:
+#            size_hint_y: .1
+#            ToggleButton:
+#                id: bn_finance
+#                text: 'finance'
+#                group: 'menu'
+#                on_press: root.main_page(self)
 #
-#    BoxLayout:
-#        orientation: 'horizontal'
-#        padding: 10
-#        spacing: 10
-#        size_hint_y: .05
+#            ToggleButton:
+#                id: bn_main
+#                text: 'main'
+#                group: 'menu'
+#                state: 'down'
+#                on_press: root.main_page(self)
 #
-#        Button:
-#            text: 'Добавить'
-#            on_press: root.test()
 #
-#        Button:
-#            text: 'Second'
-#            background_color: 'yellow'
+#            ToggleButton:
+#                id: bn_appointment
+#                text: 'appointment'
+#                group: 'menu'
+#                on_press: root.main_page(self)
+
 
