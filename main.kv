@@ -35,14 +35,14 @@
                 text: 'main'
                 group: 'menu'
                 state: 'down'
-                on_press: root.add_label(self)
+                on_press: root.main_page(self)
 
 
             ToggleButton:
                 id: bn_appointment
                 text: 'appointment'
                 group: 'menu'
-                on_press: root.change_label(self, 'app')
+                on_press: root.main_page(self)
 
 
 #<FinanceScreen>:

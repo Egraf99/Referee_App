@@ -1,9 +1,14 @@
-from kivy.app import App
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.stacklayout import StackLayout
 from kivy.uix.label import Label
 from kivy.uix.button import Button
+from kivy.uix.scrollview import ScrollView
+from kivy.uix.gridlayout import GridLayout
 from kivy.properties import ObjectProperty
+from kivy.metrics import dp
+
+from kivymd.uix.datatables import MDDataTable
+from kivymd.app import MDApp
 
 from datebase import ConnDB
 
@@ -12,10 +17,6 @@ class GameScreen(BoxLayout):
     label = ObjectProperty()
     main_box = ObjectProperty()
     content_box = ObjectProperty()
-
-    def __init__(self):
-        super().__init__()
-        self.database = ConnDB()
 
     def check_menu_button_click(self, button):
         for bn in self.buttons:
@@ -33,29 +34,46 @@ class GameScreen(BoxLayout):
 
         my_games = self.take_games()
 
-        for game in my_games:
-            sl = StackLayout(orientation='lr-bt')
-            for i in game:
-                btn = Button(text=str(i), width=len(str(i)) + 50, height=10, size_hint=(None, 0.1))
-                sl.add_widget(btn)
+        game_table = MDDataTable(
+            use_pagination=False,
+            check=False,
+            column_data=[
+                ('Дата', dp(30)),
+                ('Лига', dp(30)),
+                ('Стадион', dp(30)),
+                ('Хозяева', dp(30)),
+                ('Гости', dp(30)),
+                ('Фамилия', dp(30))
+            ],
+            row_data=my_games
+            )
 
-            self.content_box.add_widget(sl)
+        self.content_box.add_widget(game_table)
+
+    def int_to_date(self):
+        pass
+
+    def from_db_to_list(self) -> list:
+        pass
 
     def change_label(self, button, text):
         self.check_menu_button_click(button)
 
         self.label.text = text
 
-    def add_label(self, button):
-        self.check_menu_button_click(button)
-
-        self.content_box.clear_widgets()
-        self.content_box.add_widget(Label(text='New'))
-
     def take_games(self):
-        return self.database.take_games()
+        db = ConnDB()
+        games = db.take_games()
+        db.close()
 
-class MainApp(App):
+        list_of_games = []
+        for game_info in games:
+            league, date, stadium, team_home, team_guest, referee = game_info[:6]
+            list_of_games.append([date, league, stadium, team_home, team_guest, referee])
+        return list_of_games
+
+
+class MainApp(MDApp):
     def build(self):
         return GameScreen()
 
