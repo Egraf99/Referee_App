@@ -1,4 +1,5 @@
 from kivy.uix.boxlayout import BoxLayout
+from kivy.uix.screenmanager import ScreenManager, Screen
 from kivy.uix.stacklayout import StackLayout
 from kivy.uix.label import Label
 from kivy.uix.button import Button
@@ -35,8 +36,8 @@ class GameScreen(BoxLayout):
         my_games = self.take_games()
 
         game_table = MDDataTable(
-            use_pagination=False,
-            check=False,
+            use_pagination=True,
+            check=True,
             column_data=[
                 ('Дата', dp(30)),
                 ('Лига', dp(30)),
@@ -75,6 +76,7 @@ class GameScreen(BoxLayout):
 
 class MainApp(MDApp):
     def build(self):
+        self.theme_cls.primary_palette = "Gray"
         return GameScreen()
 
 
