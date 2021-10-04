@@ -21,8 +21,13 @@
 
                 BoxLayout:
                     id: games_layout
-                    Label:
-                        text: 'time lost'
+
+                MDFloatingActionButtonSpeedDial:
+                    rotation_root_button: True
+                    callback: root.callback
+                    data: {'Python': 'language-python', 'PHP': 'language-php','C++': 'language-cpp',}
+                    icon: 'plus'
+                    md_bg_color: app.theme_cls.primary_color
 
             MDBottomNavigationItem:
                 name: 'finance'
