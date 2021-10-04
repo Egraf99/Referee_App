@@ -1,54 +1,47 @@
 <GameScreen>:
-    top_bn: top_bn
-    label: label
-    content_box: content_box
-#    buttons: [bn_appointment, bn_main, bn_finance]
-    BoxLayout:
+    games_layout: games_layout
+
+    MDBoxLayout:
         orientation: 'vertical'
 
-
-        BoxLayout:
-            size_hint_y: .1
-            Button:
-                id: top_bn
-                text: 'Press me'
-
-        BoxLayout:
-            id: content_box
-            Image:
-                source: 'image/second.jpg'
-            Label:
-                id: label
-                text: 'Main field'
+        MDToolbar:
+            title: 'App'
+            type: 'top'
 
         MDBottomNavigation:
-            panel_color: .2, .2, .2, .1
+            panel_color: .5, .5, .5, 1
+            first_widget: True
 
             MDBottomNavigationItem:
+                id: games_screen
                 name: 'main'
-                text: 'Game'
-                icon: 'language-python'
+                text: 'Games'
+                icon: 'whistle'
+                on_tab_press: root.main_page()
 
-                MDLabel:
-                    text: 'Game'
-                    halign: 'center'
+                BoxLayout:
+                    id: games_layout
+                    Label:
+                        text: 'time lost'
 
             MDBottomNavigationItem:
-                name: 'screen2'
+                name: 'finance'
                 text: 'Finance'
-                icon: 'language-python'
+                icon: 'cash-usd-outline'
 
                 MDLabel:
                     text: 'Finance'
                     halign: 'center'
 
+
+
             MDBottomNavigationItem:
-                name: 'scree 3'
-                text: 'JS'
-                icon: 'language-javascript'
+                name: 'comming'
+                text: 'python'
+                icon: 'language-python'
 
                 MDLabel:
-                    text: 'JS'
+                    text: 'Comming soon'
                     halign: 'center'
 
 

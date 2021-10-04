@@ -17,7 +17,11 @@ from datebase import ConnDB
 class GameScreen(BoxLayout):
     label = ObjectProperty()
     main_box = ObjectProperty()
-    content_box = ObjectProperty()
+    games_layout = ObjectProperty()
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.main_page()
 
     def check_menu_button_click(self, button):
         for bn in self.buttons:
@@ -26,12 +30,12 @@ class GameScreen(BoxLayout):
             else:
                 bn.disabled = False
 
-    def main_page(self, button):
-        self.check_menu_button_click(button)
+    def main_page(self):
+        # self.check_menu_button_click(button)
 
-        self.content_box.clear_widgets()
+        self.games_layout.clear_widgets()
 
-        self.top_bn.text = button.text
+        # self.top_bn.text = button.text
 
         my_games = self.take_games()
 
@@ -49,7 +53,7 @@ class GameScreen(BoxLayout):
             row_data=my_games
             )
 
-        self.content_box.add_widget(game_table)
+        self.games_layout.add_widget(game_table)
 
     def int_to_date(self):
         pass
@@ -77,6 +81,7 @@ class GameScreen(BoxLayout):
 class MainApp(MDApp):
     def build(self):
         self.theme_cls.primary_palette = "Gray"
+        self.theme_cls.theme_style = "Dark"
         return GameScreen()
 
 
