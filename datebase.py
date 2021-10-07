@@ -6,8 +6,8 @@ class ConnDB:
         self.cursor = sqlite3.connect('referee.db').cursor()
 
     def take_games(self):
-        sql = '''SELECT league.name, year||' '||month||' '||day||' '||time AS date,
-                 stadium.name, th.name, tg.name,
+        sql = '''SELECT league.name, year||' '||month||' '||day AS date,
+                 time, stadium.name, th.name, tg.name,
                  rc.first_name||' '||rc.second_name AS referee_chief,
                  rf.first_name||' '||rf.second_name AS referee_first,
                  rs.first_name||' '||rs.second_name AS referee_second,

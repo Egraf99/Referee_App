@@ -1,17 +1,23 @@
 from kivy.uix.boxlayout import BoxLayout
+from kivy.uix.scrollview import ScrollView
 from kivy.properties import ObjectProperty
 from kivy.metrics import dp
 
 from kivymd.uix.datatables import MDDataTable
+from kivymd.uix.dialog import MDDialog
+from kivymd.uix.button import MDFlatButton
 from kivymd.app import MDApp
 
 from datebase import ConnDB
 
+class Content(ScrollView):
+    pass
 
 class GameScreen(BoxLayout):
     label = ObjectProperty()
     main_box = ObjectProperty()
     games_layout = ObjectProperty()
+    dialog = None
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -27,6 +33,7 @@ class GameScreen(BoxLayout):
             check=True,
             column_data=[
                 ('Дата', dp(30)),
+                ('Время', dp(30)),
                 ('Лига', dp(30)),
                 ('Стадион', dp(30)),
                 ('Хозяева', dp(30)),
@@ -46,12 +53,31 @@ class GameScreen(BoxLayout):
 
         list_of_games = []
         for game_info in games:
-            league, date, stadium, team_home, team_guest, referee = game_info[:6]
-            list_of_games.append([date, league, stadium, team_home, team_guest, referee])
+            league, date, time, stadium, team_home, team_guest, referee = game_info[:7]
+            date = date.split()
+            date = f'{date[2]}.{date[1]}.{date[0]}'
+            time = f'{time // 100}:{time % 100}'
+            list_of_games.append([date, time, league, stadium, team_home, team_guest, referee])
         return list_of_games
 
     def callback(self, instance):
-        print(instance.icon)
+        if instance.icon == "language-python":
+            self.pop_dialog_add_match()
+
+    def pop_dialog_add_match(self):
+        if not self.dialog:
+            print('ok')
+            self.dialog = MDDialog(
+                height=self.minimum_height,
+                text="something work",
+                type="custom",
+                content_cls=Content(),
+                buttons=[MDFlatButton(text="CANCEL"),
+                         MDFlatButton(
+                             text="DISCARD"), ]
+            )
+        self.dialog.get_normal_height()
+        self.dialog.open()
 
 
 class MainApp(MDApp):

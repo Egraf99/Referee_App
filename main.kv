@@ -50,26 +50,33 @@
                     halign: 'center'
 
 
-#        BoxLayout:
-#            size_hint_y: .1
-#            ToggleButton:
-#                id: bn_finance
-#                text: 'finance'
-#                group: 'menu'
-#                on_press: root.main_page(self)
-#
-#            ToggleButton:
-#                id: bn_main
-#                text: 'main'
-#                group: 'menu'
-#                state: 'down'
-#                on_press: root.main_page(self)
-#
-#
-#            ToggleButton:
-#                id: bn_appointment
-#                text: 'appointment'
-#                group: 'menu'
-#                on_press: root.main_page(self)
+<Content>:
+    size_hint_y: None
+    size: (root.width, Window.height * 0.8)
 
+    BoxLayout:
+        orientation: "vertical"
+        size_hint_y: None
+        height: Window.height * 0.79
+        MDTextField:
+            hint_text: "Date"
+            helper_text: "This will disappear when you click off"
+            helper_text_mode: "persistent"
 
+        MDTextField:
+            hint_text: "Time"
+
+        MDTextField:
+            hint_text: "Some"
+
+        MDTextField:
+            hint_text: "Some"
+
+        MDTextField:
+            hint_text: "Some"
+
+        MDTextField:
+            hint_text: "Some"
+
+        MDTextField:
+            hint_text: "Some"
