@@ -6,12 +6,15 @@ from kivy.metrics import dp
 from kivymd.uix.datatables import MDDataTable
 from kivymd.uix.dialog import MDDialog
 from kivymd.uix.button import MDFlatButton
+from kivymd.uix.textfield import MDTextField
+from kivymd.uix.list import OneLineAvatarIconListItem
 from kivymd.app import MDApp
 
 from datebase import ConnDB
 
-class Content(ScrollView):
+class TextField(BoxLayout):
     pass
+
 
 class GameScreen(BoxLayout):
     label = ObjectProperty()
@@ -68,15 +71,12 @@ class GameScreen(BoxLayout):
         if not self.dialog:
             print('ok')
             self.dialog = MDDialog(
-                height=self.minimum_height,
-                text="something work",
+                title="something work",
                 type="custom",
-                content_cls=Content(),
+                content_cls=TextField(),
                 buttons=[MDFlatButton(text="CANCEL"),
-                         MDFlatButton(
-                             text="DISCARD"), ]
+                         MDFlatButton(text="DISCARD"), ]
             )
-        self.dialog.get_normal_height()
         self.dialog.open()
 
 
