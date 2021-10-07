@@ -3,7 +3,6 @@
 
     MDBoxLayout:
         orientation: 'vertical'
-
         MDToolbar:
             title: 'App'
             type: 'top'
@@ -25,7 +24,7 @@
                 MDFloatingActionButtonSpeedDial:
                     rotation_root_button: True
                     callback: root.callback
-                    data: {'Python': 'language-python', 'PHP': 'language-php','C++': 'language-cpp',}
+                    data: {'Stadium': 'stadium-variant','Referee': 'account-plus-outline','Game': 'cookie-plus-outline'}
                     icon: 'plus'
                     md_bg_color: app.theme_cls.primary_color
 
@@ -51,16 +50,35 @@
 
 
 <TextField>:
-    orientation: "vertical"
-    spacing: "12dp"
     size_hint_y: None
-    height: "180dp"
+    height: "350dp"
+    BoxLayout:
+        orientation: "vertical"
+        size_hint_y: None
+        height: "320dp"
 
-    MDTextField:
-        hint_text: "City"
+        MDTextField:
+            hint_text: "City"
 
-    MDTextField:
-        hint_text: "Street"
+        MDTextField:
+            hint_text: "Street"
 
-    MDTextField:
-        hint_text: "Street"
+        MDTextField:
+            hint_text: "Street"
+
+        MDTextField:
+            hint_text: "Street"
+
+        MDTextField:
+            hint_text: "Street"
+
+        MDTextField:
+            hint_text: "Street"
+
+
+<MatchTable>:
+    cell_size: 30
+    use_pagination: False
+    check: True
+    column_data:[('Дата', self.cell_size), ('Время', self.cell_size), ('Лига', self.cell_size),('Стадион', self.cell_size),('Хозяева', self.cell_size),('Гости', self.cell_size),('Фамилия', self.cell_size)]
+    row_data: root.take_games
