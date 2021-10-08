@@ -16,7 +16,7 @@
                 name: 'main'
                 text: 'Games'
                 icon: 'whistle'
-                on_tab_press: root.main_page()
+#                on_tab_press: root.main_page()
 
                 BoxLayout:
                     id: games_layout
@@ -48,8 +48,18 @@
                     text: 'Comming soon'
                     halign: 'center'
 
+<Button_cancel>:
+    text: "CANCEL"
 
-<TextField>:
+<Dialog>:
+    list_buttons: self.take_button()
+    title: "Add game"
+    type: "custom"
+    content_cls: self.take_textfield
+    buttons: self.but
+
+
+<TextField@ScrollView>:
     size_hint_y: None
     height: "350dp"
     BoxLayout:
@@ -80,5 +90,5 @@
     cell_size: 30
     use_pagination: False
     check: True
-    column_data:[('Дата', self.cell_size), ('Время', self.cell_size), ('Лига', self.cell_size),('Стадион', self.cell_size),('Хозяева', self.cell_size),('Гости', self.cell_size),('Фамилия', self.cell_size)]
+    column_data:[('Дата', 28), ('Время', 12), ('Лига', self.cell_size),('Стадион', self.cell_size),('Хозяева', self.cell_size),('Гости', self.cell_size),('Фамилия', self.cell_size)]
     row_data: root.take_games

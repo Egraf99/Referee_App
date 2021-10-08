@@ -13,8 +13,27 @@ from kivymd.app import MDApp
 from datebase import ConnDB
 
 
+class Button_cancel(MDFlatButton):
+    pass
+
+
 class TextField(ScrollView):
     pass
+
+
+class Dialog(MDDialog):
+    but = ObjectProperty()
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.but = [MDFlatButton(text="CANCEL")]
+
+    def take_textfield(self):
+        return TextField()
+
+    def take_button(self):
+        return [MDFlatButton(text="CANCEL", ), MDFlatButton(text="ADD"), ]
+
 
 class MatchTable(MDDataTable):
     @property
@@ -26,11 +45,31 @@ class MatchTable(MDDataTable):
         list_of_games = []
         for game_info in games:
             league, date, time, stadium, team_home, team_guest, referee = game_info[:7]
-            date = date.split()
-            date = f'{date[2]}.{date[1]}.{date[0]}'
-            time = f'{time // 100}:{time % 100}'
+            date = self._date_list_in_str(date.split())
+            time = self._time_int_in_str(time)
             list_of_games.append([date, time, league, stadium, team_home, team_guest, referee])
         return list_of_games
+
+    def _time_int_in_str(self, time: int) -> str:
+        hour, minute = time // 100, time % 100
+        hour = self._change_if_less_ten(hour)
+        minute = self._change_if_less_ten(minute)
+
+        return f'{hour}:{minute}'
+
+    def _date_list_in_str(self, date: list) -> str:
+        year, month, day = date
+        day = self._change_if_less_ten(day)
+
+        return f'{day}.{month}.{year}'
+
+    @staticmethod
+    def _change_if_less_ten(number):
+        if int(number) < 10:
+            number = f'0{number}'
+
+        return number
+
 
 class GameScreen(BoxLayout):
     label = ObjectProperty()
@@ -45,11 +84,7 @@ class GameScreen(BoxLayout):
     def main_page(self):
         self.games_layout.clear_widgets()
 
-        my_games = self.take_games
-
-        game_table = MatchTable()
-
-        self.games_layout.add_widget(game_table)
+        self.games_layout.add_widget(MatchTable())
 
     def callback(self, instance):
         if instance.icon == "cookie-plus-outline":
@@ -61,26 +96,11 @@ class GameScreen(BoxLayout):
                 title="Add game",
                 type="custom",
                 content_cls=TextField(),
-                buttons=[MDFlatButton(text="CANCEL",),
+                buttons=[Button_cancel(),
                          MDFlatButton(text="ADD"), ]
             )
         self.dialog.open()
 
-    @property
-    def take_games(self):
-        db = ConnDB()
-        games = db.take_games()
-        db.close()
-
-        list_of_games = []
-        for game_info in games:
-            league, date, time, stadium, team_home, team_guest, referee = game_info[:7]
-            date = date.split()
-            date = f'{date[2]}.{date[1]}.{date[0]}'
-            time = f'{time // 100}:{time % 100}'
-            list_of_games.append([date, time, league, stadium, team_home, team_guest, referee])
-        print(list_of_games)
-        return list_of_games
 
 class MainApp(MDApp):
     def build(self):
