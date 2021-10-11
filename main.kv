@@ -17,6 +17,7 @@
                 text: 'Games'
                 icon: 'whistle'
 
+
                 BoxLayout:
                     id: games_layout
 
@@ -46,6 +47,7 @@
                 MDLabel:
                     text: 'Comming soon'
                     halign: 'center'
+
 
 <AddMatch>:
     size_hint_y: None
@@ -88,4 +90,5 @@
         ('Хозяева', self.cell_size),
         ('Гости', self.cell_size),
         ('Фамилия', self.cell_size)]
+
     row_data: root.take_games
