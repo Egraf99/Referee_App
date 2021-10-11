@@ -17,13 +17,17 @@
                 text: 'Games'
                 icon: 'whistle'
 
+
                 BoxLayout:
                     id: games_layout
 
                 MDFloatingActionButtonSpeedDial:
                     rotation_root_button: True
-                    callback: root.callback
-                    data: {'Stadium': 'stadium-variant','Referee': 'account-plus-outline','Game': 'cookie-plus-outline'}
+                    callback: root.add_button_callback
+                    data:
+                        {'Stadium': 'stadium-variant',
+                        'Referee': 'account-plus-outline',
+                        'Game': 'cookie-plus-outline'}
                     icon: 'plus'
                     md_bg_color: app.theme_cls.primary_color
 
@@ -47,33 +51,50 @@
                     text: 'Comming soon'
                     halign: 'center'
 
+
 <AddMatch>:
     size_hint_y: None
     height: "350dp"
     BoxLayout:
         orientation: "vertical"
         size_hint_y: None
-        height: "320dp"
+        height: "480dp"
 
         MDTextField:
-            hint_text: "City"
+            hint_text: "Stadium"
             on_focus: root.open_drop_menu(self)
 
         MDTextField:
-            hint_text: "Street"
-            on_focus: app.open_drop_menu(self)
+            hint_text: "Date and time"
+            on_focus: root.open_drop_menu(self)
 
         MDTextField:
-            hint_text: "Date"
-            on_focus: app.open_drop_menu(self)
+            hint_text: "League"
+            on_focus: root.open_drop_menu(self)
 
         MDTextField:
             hint_text: "Home team"
-            on_focus: app.open_drop_menu(self)
+            on_focus: root.open_drop_menu(self)
 
         MDTextField:
             hint_text: "Guest team"
-            on_focus: app.open_drop_menu(self)
+            on_focus: root.open_drop_menu(self)
+
+        MDTextField:
+            hint_text: "Chief referee"
+            on_focus: root.open_drop_menu(self)
+
+        MDTextField:
+            hint_text: "First referee"
+            on_focus: root.open_drop_menu(self)
+
+        MDTextField:
+            hint_text: "Second referee"
+            on_focus: root.open_drop_menu(self)
+
+        MDTextField:
+            hint_text: "Reserve referee"
+            on_focus: root.open_drop_menu(self)
 
 
 <MatchTable>:

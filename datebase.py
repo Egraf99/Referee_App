@@ -2,9 +2,6 @@ import sqlite3
 
 
 class ConnDB:
-    def __init__(self):
-        self.cursor = sqlite3.connect('referee.db').cursor()
-
     def take_games(self):
         sql = '''SELECT league.name, year||' '||month||' '||day AS date,
                  time, stadium.name, th.name, tg.name,
@@ -23,14 +20,23 @@ class ConnDB:
                       INNER JOIN Referee AS rs ON Games.referee_second = rs.id
                       INNER JOIN Referee AS rr ON Games.referee_reserve = rr.id'''
 
+        return self.make_request(sql)
+
+    def take_stadium(self):
+        sql = '''SELECT name FROM stadium
+                 ORDER BY name ASC'''
+
+        return self.make_request(sql)
+
+    def make_request(self, sql):
+        self.cursor = sqlite3.connect('referee.db').cursor()
         self.cursor.execute(sql)
         games = self.cursor.fetchall()
-        self.close()
+
+        self.cursor.close()
 
         return games
 
-    def close(self):
-        self.cursor.close()
 
 if __name__ == '__main__':
     print(ConnDB().take_games())
