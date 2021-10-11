@@ -16,7 +16,6 @@
                 name: 'main'
                 text: 'Games'
                 icon: 'whistle'
-#                on_tab_press: root.main_page()
 
                 BoxLayout:
                     id: games_layout
@@ -48,15 +47,7 @@
                     text: 'Comming soon'
                     halign: 'center'
 
-<Dialog>:
-    list_buttons: self.take_button()
-    title: "Add game"
-    type: "custom"
-    content_cls: self.take_textfield
-    buttons: self.but
-
-
-<TextField>:
+<AddMatch>:
     size_hint_y: None
     height: "350dp"
     BoxLayout:
@@ -66,26 +57,35 @@
 
         MDTextField:
             hint_text: "City"
+            on_focus: root.open_drop_menu(self)
 
         MDTextField:
             hint_text: "Street"
+            on_focus: app.open_drop_menu(self)
 
         MDTextField:
-            hint_text: "Street"
+            hint_text: "Date"
+            on_focus: app.open_drop_menu(self)
 
         MDTextField:
-            hint_text: "Street"
+            hint_text: "Home team"
+            on_focus: app.open_drop_menu(self)
 
         MDTextField:
-            hint_text: "Street"
-
-        MDTextField:
-            hint_text: "Street"
+            hint_text: "Guest team"
+            on_focus: app.open_drop_menu(self)
 
 
 <MatchTable>:
     cell_size: 30
     use_pagination: False
     check: True
-    column_data:[('Дата', 28), ('Время', 12), ('Лига', self.cell_size),('Стадион', self.cell_size),('Хозяева', self.cell_size),('Гости', self.cell_size),('Фамилия', self.cell_size)]
+    column_data:
+        [('Дата', 28),
+        ('Время', 12),
+        ('Лига', self.cell_size),
+        ('Стадион', self.cell_size),
+        ('Хозяева', self.cell_size),
+        ('Гости', self.cell_size),
+        ('Фамилия', self.cell_size)]
     row_data: root.take_games
