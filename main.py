@@ -16,16 +16,61 @@ from datebase import ConnDB
 
 
 class AddMatch(ScrollView):
+    def __init__(self, **kwargs):
+        super(AddMatch, self).__init__(**kwargs)
+
+        # функция on_focus() объекта TextInput срабатывает при фокусе на объект и разфокусе
+        # данный check помогает вызывать необходимые функции только при фокусе на объект
+        self.check_text_focus = False
+
+        self.drop_menu = MDDropdownMenu(
+            width_mult=dp(56),
+            max_height=dp(180),
+        )
+
+    def take_stadiums(self):
+        stadiums = ConnDB().take_stadium()
+        return stadiums
+
+    def add_item_in_text_input(self, text_item):
+        self.drop_menu.caller.text = text_item
+        self.drop_menu.dismiss()
+
     def open_drop_menu(self, field):
-        print(field)
+        drop_open = False
+        if not self.check_text_focus:
+            self.drop_menu.caller = field
+
+            if self.drop_menu.caller.hint_text == "Stadium":
+                stadiums = self.take_stadiums()
+
+                self.drop_menu.items = [
+                    {
+                        "text": f"{x[0]}",
+                        "viewclass": "OneLineListItem",
+                        "on_release": lambda x=f"{x[0]}": self.add_item_in_text_input(x),
+                    } for x in stadiums
+                ]
+
+                drop_open = True
+            elif self.drop_menu.caller.hint_text == "Date and time":
+                self.drop_menu.items = []
+            elif self.drop_menu.caller.hint_text == "Date":
+                print('date')
+
+            if drop_open:
+                self.drop_menu.open()
+
+            self.check_text_focus = True
+
+        else:
+            self.check_text_focus = False
 
 
 class MatchTable(MDDataTable):
     @property
     def take_games(self):
-        db = ConnDB()
-        games = db.take_games()
-        db.close()
+        games = ConnDB().take_games()
 
         list_of_games = []
         for game_info in games:
@@ -68,7 +113,7 @@ class GameScreen(BoxLayout):
 
         self.games_layout.add_widget(MatchTable())
 
-    def callback(self, instance):
+    def add_button_callback(self, instance):
         if instance.icon == "cookie-plus-outline":
             self.pop_dialog_add_match()
         elif instance.icon == "":
@@ -77,36 +122,19 @@ class GameScreen(BoxLayout):
             pass
 
     def pop_dialog_add_match(self):
-        self._make_dropmenu()
-
         self.dialog = MDDialog(
             auto_dismiss=False,
             title="Add game",
             type="custom",
             content_cls=AddMatch(),
             buttons=[MDFlatButton(text="CANCEL", on_release=self.dismiss_dialog),
-                     MDFlatButton(text="ADD"), ]
+                     MDFlatButton(text="ADD", on_release=self.print_release), ]
         )
 
         self.dialog.open()
 
-    def _make_dropmenu(self):
-        menu_items = [
-            {
-                "text": f"Item 5",
-                "viewclass": "OneLineListItem",
-                "on_release": lambda x='5': self.menu_callback(x),
-            }
-        ]
-        self.drop_menu = MDDropdownMenu(
-            items=menu_items,
-            width_mult=dp(56),
-            max_height=dp(180),
-        )
-
-    def menu_callback(self, text_item):
-        self.drop_menu.caller.text = text_item
-        self.drop_menu.dismiss()
+    def print_release(self, event):
+        print(self.dialog.content_cls.children)
 
     def dismiss_dialog(self, event):
         self.dialog.dismiss()
@@ -119,28 +147,7 @@ class MainApp(MDApp):
 
         self.game_screen = GameScreen()
 
-        # функция on_focus() объекта TextInput срабатывает при фокусе на объект и разфокусе
-        # данный check помогает вызывать необходимые функции только при фокусе на объект
-        self.check_text_focus = False
-
         return self.game_screen
-
-    def open_drop_menu(self, field):
-        if not self.check_text_focus:
-            self.game_screen.drop_menu.caller = field
-
-            if self.game_screen.drop_menu.caller.hint_text == "City":
-                print('city')
-            elif self.game_screen.drop_menu.caller.hint_text == "Street":
-                print('street')
-            elif self.game_screen.drop_menu.caller.hint_text == "Date":
-                print('date')
-
-            self.check_text_focus = True
-            self.game_screen.drop_menu.open()
-
-        else:
-            self.check_text_focus = False
 
 
 if __name__ == "__main__":
