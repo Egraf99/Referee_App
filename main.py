@@ -20,15 +20,18 @@ class DropMenu(MDDropdownMenu):
         super(DropMenu, self).__init__(**kwargs)
         self.width_mult = dp(56)
 
-    def take_data(self, mode="stadium"):
-        db_method = f"take_{mode}()"
-        data = eval("ConnDB()." + db_method)
-        return data
+    def take_data(self, mode):
+        if not mode:
+            return []
+        else:
+            db_method = f"take_{mode}()"
+            data = eval("DB." + db_method)
+            return data
 
     def set_items(self, text_list, list_items: list):
         self.items = [{"text": f"{x}",
                        "viewclass": "OneLineListItem",
-                       "on_release": lambda x=f"{x[0]}": text_list.add_item_in_text_input(x),
+                       "on_release": lambda x=f"{x}": text_list.add_item_in_text_input(x),
                        } for x in list_items]
 
 
@@ -42,37 +45,23 @@ class AddMatch(ScrollView):
 
         self.drop_menu = DropMenu()
 
-    def take_stadiums(self):
-        stadiums = ConnDB().take_stadium()
-        return stadiums
-
     def add_item_in_text_input(self, text_item):
         self.drop_menu.caller.text = text_item
         self.drop_menu.dismiss()
 
     def open_drop_menu(self, field):
-        # помечает, для каких полей нужно открывать drop_menu
-        drop_open = False
-        print(self.check_text_focus)
         if not self.check_text_focus:
-            print("im here")
+            field.text = ""  # очищаем поле ввода
+
+            # устанавливаем для всплывающего меню поле ввода, откуда его вызывали
             self.drop_menu.caller = field
 
-            if self.drop_menu.caller.hint_text == "Stadium":
-                stadiums = self.drop_menu.take_data("stadium")
+            # берем текст вызывающего поля ввода для определения строк в всплывающем меню
+            type_data = self._take_type_data(self.drop_menu.caller.hint_text)
+            items = self.drop_menu.take_data(type_data)
+            self.drop_menu.set_items(self, [i[0] for i in items])
 
-                self.drop_menu.set_items(self, [x[0] for x in stadiums])
-
-
-                drop_open = True
-
-            elif self.drop_menu.caller.hint_text == "Date and time":
-                self.drop_menu.items = []
-
-            elif self.drop_menu.caller.hint_text == "Date":
-                print('date')
-
-            if drop_open:
+            if self.drop_menu.items:
                 self.drop_menu.open()
 
             self.check_text_focus = True
@@ -80,40 +69,62 @@ class AddMatch(ScrollView):
         else:
             self.check_text_focus = False
 
-    i = 0
+    def _take_type_data(self, hint_text: str):
+        hint_text_list = hint_text.lower().split()
+
+        if hint_text_list[0] == "date":
+            return None
+
+        if len(hint_text_list) == 2:
+            return hint_text_list[1]
+
+        elif len(hint_text_list) == 1:
+            return hint_text_list[0]
+
+        else:
+            return None
 
     def update_drop_menu(self, textinput):
-        self.drop_menu.dismiss()
-        items = []
-        stadiums = self.drop_menu.take_data("stadium")
-        for item in stadiums:
-            if textinput.text.lower() in item[0].lower():
-                items.append(item)
-        self.drop_menu.items = [
-            {
-                "text": f"{x[0]}",
-                "viewclass": "OneLineListItem",
-                "on_release": lambda x=f"{x[0]}": self.add_item_in_text_input(x),
-            } for x in items
-        ]
-        self.drop_menu.open()
+        if self.check_text_focus:
+            self.drop_menu.dismiss()
+
+            matching_items = []
+
+            # берем текст вызывающего поля ввода для определения строк в всплывающем меню
+            type_data = self._take_type_data(self.drop_menu.caller.hint_text)
+            items = self.drop_menu.take_data(type_data)
+
+            for item in items:
+                if textinput.text.lower() in item[0].lower():
+                    matching_items.append(item)
+
+            self.drop_menu.set_items(self, [i[0] for i in matching_items])
+
+            self.drop_menu.open()
+
+    def enter_press(self):
+        self.add_item_in_text_input("enter")
 
 
 class MatchTable(MDDataTable):
     @property
     def take_games(self):
-        games = ConnDB().take_games()
+        games = DB.take_games()
 
         list_of_games = []
         for game_info in games:
             league, date, time, stadium, team_home, team_guest, referee = game_info[:7]
+
             date = self._date_list_in_str(date.split())
             time = self._time_int_in_str(time)
+
             list_of_games.append([date, time, league, stadium, team_home, team_guest, referee])
+
         return list_of_games
 
     def _time_int_in_str(self, time: int) -> str:
         hour, minute = time // 100, time % 100
+
         hour = self._change_if_less_ten(hour)
         minute = self._change_if_less_ten(minute)
 
@@ -121,7 +132,9 @@ class MatchTable(MDDataTable):
 
     def _date_list_in_str(self, date: list) -> str:
         year, month, day = date
+
         day = self._change_if_less_ten(day)
+        month = self._change_if_less_ten(month)
 
         return f'{day}.{month}.{year}'
 
@@ -147,6 +160,7 @@ class GameScreen(BoxLayout):
 
     def add_button_callback(self, instance):
         if instance.icon == "cookie-plus-outline":
+            print("\ncheck for phone\n")
             self.pop_dialog_add_match()
         elif instance.icon == "":
             pass
@@ -160,15 +174,16 @@ class GameScreen(BoxLayout):
             type="custom",
             content_cls=AddMatch(),
             buttons=[MDFlatButton(text="CANCEL", on_release=self.dismiss_dialog),
-                     MDFlatButton(text="ADD", on_release=self.print_release), ]
+                     MDFlatButton(text="ADD", on_release=self.update_match_db), ]
         )
 
         self.dialog.open()
 
-    def print_release(self, event):
+    def update_match_db(self, event):
         print(self.dialog.content_cls.children)
 
     def dismiss_dialog(self, event):
+        print(main)
         self.dialog.dismiss()
 
 
@@ -177,11 +192,10 @@ class MainApp(MDApp):
         self.theme_cls.primary_palette = "Gray"
         self.theme_cls.theme_style = "Dark"
 
-        self.game_screen = GameScreen()
-
-        return self.game_screen
+        return GameScreen()
 
 
 if __name__ == "__main__":
     main = MainApp()
+    DB = ConnDB()
     main.run()
