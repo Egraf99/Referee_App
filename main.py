@@ -15,6 +15,23 @@ from kivymd.app import MDApp
 from datebase import ConnDB
 
 
+class DropMenu(MDDropdownMenu):
+    def __init__(self, **kwargs):
+        super(DropMenu, self).__init__(**kwargs)
+        self.width_mult = dp(56)
+
+    def take_data(self, mode="stadium"):
+        db_method = f"take_{mode}()"
+        data = eval("ConnDB()." + db_method)
+        return data
+
+    def set_items(self, text_list, list_items: list):
+        self.items = [{"text": f"{x}",
+                       "viewclass": "OneLineListItem",
+                       "on_release": lambda x=f"{x[0]}": text_list.add_item_in_text_input(x),
+                       } for x in list_items]
+
+
 class AddMatch(ScrollView):
     def __init__(self, **kwargs):
         super(AddMatch, self).__init__(**kwargs)
@@ -23,10 +40,7 @@ class AddMatch(ScrollView):
         # данный check помогает вызывать необходимые функции только при фокусе на объект
         self.check_text_focus = False
 
-        self.drop_menu = MDDropdownMenu(
-            width_mult=dp(56),
-            max_height=dp(180),
-        )
+        self.drop_menu = DropMenu()
 
     def take_stadiums(self):
         stadiums = ConnDB().take_stadium()
@@ -37,20 +51,18 @@ class AddMatch(ScrollView):
         self.drop_menu.dismiss()
 
     def open_drop_menu(self, field):
+        # помечает, для каких полей нужно открывать drop_menu
         drop_open = False
+        print(self.check_text_focus)
         if not self.check_text_focus:
+            print("im here")
             self.drop_menu.caller = field
 
             if self.drop_menu.caller.hint_text == "Stadium":
-                stadiums = self.take_stadiums()
+                stadiums = self.drop_menu.take_data("stadium")
 
-                self.drop_menu.items = [
-                    {
-                        "text": f"{x[0]}",
-                        "viewclass": "OneLineListItem",
-                        "on_release": lambda x=f"{x[0]}": self.add_item_in_text_input(x),
-                    } for x in stadiums
-                ]
+                self.drop_menu.set_items(self, [x[0] for x in stadiums])
+
 
                 drop_open = True
 
@@ -73,10 +85,9 @@ class AddMatch(ScrollView):
     def update_drop_menu(self, textinput):
         self.drop_menu.dismiss()
         items = []
-        stadiums = self.take_stadiums()
+        stadiums = self.drop_menu.take_data("stadium")
         for item in stadiums:
             if textinput.text.lower() in item[0].lower():
-                print(item)
                 items.append(item)
         self.drop_menu.items = [
             {
