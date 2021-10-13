@@ -63,6 +63,7 @@
         MDTextField:
             hint_text: "Stadium"
             on_focus: root.open_drop_menu(self)
+            on_cursor: root.update_drop_menu(self)
 
         MDTextField:
             hint_text: "Date and time"

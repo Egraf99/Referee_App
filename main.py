@@ -53,8 +53,10 @@ class AddMatch(ScrollView):
                 ]
 
                 drop_open = True
+
             elif self.drop_menu.caller.hint_text == "Date and time":
                 self.drop_menu.items = []
+
             elif self.drop_menu.caller.hint_text == "Date":
                 print('date')
 
@@ -65,6 +67,25 @@ class AddMatch(ScrollView):
 
         else:
             self.check_text_focus = False
+
+    i = 0
+
+    def update_drop_menu(self, textinput):
+        self.drop_menu.dismiss()
+        items = []
+        stadiums = self.take_stadiums()
+        for item in stadiums:
+            if textinput.text.lower() in item[0].lower():
+                print(item)
+                items.append(item)
+        self.drop_menu.items = [
+            {
+                "text": f"{x[0]}",
+                "viewclass": "OneLineListItem",
+                "on_release": lambda x=f"{x[0]}": self.add_item_in_text_input(x),
+            } for x in items
+        ]
+        self.drop_menu.open()
 
 
 class MatchTable(MDDataTable):
