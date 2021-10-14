@@ -21,18 +21,42 @@ class DropMenu(MDDropdownMenu):
         self.width_mult = dp(56)
 
     def take_data(self, mode):
-        if not mode:
-            return []
-        else:
+        if mode:
             db_method = f"take_{mode}()"
-            data = eval("DB." + db_method)
-            return data
+            try:
+                data = eval("DB." + db_method)
+                return data
+            except AttributeError:
+                print(f"\n!!!!!!!!!!!!!!!\n ConnDB has no {db_method}\n!!!!!!!!!!!!!!!\n")
+        return []
 
     def set_items(self, text_list, list_items: list):
-        self.items = [{"text": f"{x}",
-                       "viewclass": "OneLineListItem",
-                       "on_release": lambda x=f"{x}": text_list.add_item_in_text_input(x),
-                       } for x in list_items]
+        if list_items:
+            self.items = [{"text": f"{x}",
+                           "viewclass": "OneLineListItem",
+                           "on_release": lambda x=f"{x}": text_list.add_item_in_text_input(x),
+                           } for x in list_items]
+        else:
+            self.items = [{"text": "No found",
+                           "viewclass": "OneLineListItem",
+                           "on_release": lambda: text_list.drop_menu.dismiss()}]
+
+
+class TextField(MDTextField):
+    def __init__(self, name, scroll, **kwargs):
+        super(TextField, self).__init__(**kwargs)
+
+        self.hint_text = name
+        self.parent_scroll = scroll
+
+    def open_drop_menu(self):
+        self.parent_scroll.open_drop_menu(self)
+
+    def update_drop_menu(self):
+        self.parent_scroll.update_drop_menu(self)
+
+    def enter_press(self):
+        self.parent_scroll.enter_press()
 
 
 class AddMatch(ScrollView):
@@ -43,7 +67,16 @@ class AddMatch(ScrollView):
         # данный check помогает вызывать необходимые функции только при фокусе на объект
         self.check_text_focus = False
 
+        text_fields = [
+            "Stadium", "Date and time", "League", "Home team", "Guest team", "Chief referee", "First referee",
+            "Second referee", "Reserve referee"
+        ]
+        self.made_drop_menu(text_fields)
+
+    def made_drop_menu(self, fields: list):
         self.drop_menu = DropMenu()
+        for name in fields:
+            self.ids.box.add_widget(TextField(name, self))
 
     def add_item_in_text_input(self, text_item):
         self.drop_menu.caller.text = text_item
@@ -159,8 +192,9 @@ class GameScreen(BoxLayout):
         self.games_layout.add_widget(MatchTable())
 
     def add_button_callback(self, instance):
+        print("\ncheck for phone...", end="")
         if instance.icon == "cookie-plus-outline":
-            print("\ncheck for phone\n")
+            print("done\n")
             self.pop_dialog_add_match()
         elif instance.icon == "":
             pass

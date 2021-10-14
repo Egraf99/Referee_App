@@ -51,52 +51,19 @@
                     text: 'Comming soon'
                     halign: 'center'
 
+<TextField>:
+    on_focus: root.open_drop_menu()
+    on_cursor: root.update_drop_menu()
+    on_text_validate: root.enter_press()
 
 <AddMatch>:
     size_hint_y: None
     height: "350dp"
     BoxLayout:
+        id: box
         orientation: "vertical"
         size_hint_y: None
         height: "480dp"
-
-        MDTextField:
-            hint_text: "Stadium"
-            on_focus: root.open_drop_menu(self)
-            on_cursor: root.update_drop_menu(self)
-            on_text_validate: root.enter_press()
-
-        MDTextField:
-            hint_text: "Date and time"
-            on_focus: root.open_drop_menu(self)
-
-        MDTextField:
-            hint_text: "League"
-            on_focus: root.open_drop_menu(self)
-
-        MDTextField:
-            hint_text: "Home team"
-            on_focus: root.open_drop_menu(self)
-
-        MDTextField:
-            hint_text: "Guest team"
-            on_focus: root.open_drop_menu(self)
-
-        MDTextField:
-            hint_text: "Chief referee"
-            on_focus: root.open_drop_menu(self)
-
-        MDTextField:
-            hint_text: "First referee"
-            on_focus: root.open_drop_menu(self)
-
-        MDTextField:
-            hint_text: "Second referee"
-            on_focus: root.open_drop_menu(self)
-
-        MDTextField:
-            hint_text: "Reserve referee"
-            on_focus: root.open_drop_menu(self)
 
 
 <MatchTable>:
