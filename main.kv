@@ -52,8 +52,8 @@
                     halign: 'center'
 
 <TextField>:
-    on_focus: root.open_drop_menu()
-    on_cursor: root.update_drop_menu()
+    on_focus: root.on_focus_()
+    on_cursor: root.on_cursor_()
     on_text_validate: root.enter_press()
 
 <AddMatch>:

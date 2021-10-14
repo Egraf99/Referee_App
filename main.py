@@ -46,63 +46,85 @@ class TextField(MDTextField):
     def __init__(self, name, scroll, **kwargs):
         super(TextField, self).__init__(**kwargs)
 
-        self.hint_text = name
-        self.parent_scroll = scroll
-
-    def open_drop_menu(self):
-        self.parent_scroll.open_drop_menu(self)
-
-    def update_drop_menu(self):
-        self.parent_scroll.update_drop_menu(self)
-
-    def enter_press(self):
-        self.parent_scroll.enter_press()
-
-
-class AddMatch(ScrollView):
-    def __init__(self, **kwargs):
-        super(AddMatch, self).__init__(**kwargs)
-
         # функция on_focus() объекта TextInput срабатывает при фокусе на объект и разфокусе
         # данный check помогает вызывать необходимые функции только при фокусе на объект
         self.check_text_focus = False
 
-        text_fields = [
-            "Stadium", "Date and time", "League", "Home team", "Guest team", "Chief referee", "First referee",
-            "Second referee", "Reserve referee"
-        ]
-        self.made_drop_menu(text_fields)
+        self.do_open_menu = None
 
-    def made_drop_menu(self, fields: list):
+        self.hint_text = name
+        self.parent_scroll = scroll
+
+    def on_focus_(self):
+        if not self.check_text_focus:
+            self.on_focus__()
+        else:
+            self.check_text_focus = False
+
+    def on_focus__(self):
+        pass
+
+    def on_cursor_(self):
+        pass
+
+    def enter_press(self):
+        self.add_item_in_text_input("enter")
+
+
+class NoDateTF(TextField):
+    def __init__(self, name, scroll, **kwargs):
+        super(NoDateTF, self).__init__(name, scroll, **kwargs)
+
+        self.do_open_menu = True
         self.drop_menu = DropMenu()
-        for name in fields:
-            self.ids.box.add_widget(TextField(name, self))
 
     def add_item_in_text_input(self, text_item):
         self.drop_menu.caller.text = text_item
         self.drop_menu.dismiss()
 
-    def open_drop_menu(self, field):
-        if not self.check_text_focus:
-            field.text = ""  # очищаем поле ввода
+    def on_focus__(self):
+        """Открытие всплывающего меню"""
+        self.text = ""
 
-            # устанавливаем для всплывающего меню поле ввода, откуда его вызывали
-            self.drop_menu.caller = field
+        # устанавливаем для всплывающего меню поле ввода, откуда его вызывали
+        self.drop_menu.caller = self
 
-            # берем текст вызывающего поля ввода для определения строк в всплывающем меню
-            type_data = self._take_type_data(self.drop_menu.caller.hint_text)
-            items = self.drop_menu.take_data(type_data)
-            self.drop_menu.set_items(self, [i[0] for i in items])
+        # берем текст вызывающего поля ввода для определения строк в всплывающем меню
+        type_data = self._take_type_data(self.drop_menu.caller.hint_text)
+        items = self.drop_menu.take_data(type_data)
+        self.drop_menu.set_items(self, [i[0] for i in items])
 
-            if self.drop_menu.items:
-                self.drop_menu.open()
+        if items:
+            self.drop_menu_open()
 
-            self.check_text_focus = True
+        self.check_text_focus = True
 
-        else:
-            self.check_text_focus = False
+    def on_cursor_(self):
+        """Обновление всплывающего меню"""
+        if self.do_open_menu:
+            if self.check_text_focus:
+                self.drop_menu.dismiss()
 
-    def _take_type_data(self, hint_text: str):
+                matching_items = []
+
+                # берем текст вызывающего поля ввода для определения строк в всплывающем меню
+                type_data = self._take_type_data(self.drop_menu.caller.hint_text)
+                items = self.drop_menu.take_data(type_data)
+
+                for item in items:
+                    if self.text.lower() in item[0].lower():
+                        matching_items.append(item)
+
+                self.drop_menu.set_items(self, [i[0] for i in matching_items])
+
+            self.drop_menu.open()
+
+    def drop_menu_open(self):
+        if self.do_open_menu:
+            self.drop_menu.open()
+
+    @staticmethod
+    def _take_type_data(hint_text: str):
         hint_text_list = hint_text.lower().split()
 
         if hint_text_list[0] == "date":
@@ -117,26 +139,36 @@ class AddMatch(ScrollView):
         else:
             return None
 
-    def update_drop_menu(self, textinput):
-        if self.check_text_focus:
-            self.drop_menu.dismiss()
 
-            matching_items = []
+class DateTF(TextField):
+    def __init__(self, name, scroll, **kwargs):
+        super(DateTF, self).__init__(name, scroll, **kwargs)
 
-            # берем текст вызывающего поля ввода для определения строк в всплывающем меню
-            type_data = self._take_type_data(self.drop_menu.caller.hint_text)
-            items = self.drop_menu.take_data(type_data)
+        self.do_open_menu = False
 
-            for item in items:
-                if textinput.text.lower() in item[0].lower():
-                    matching_items.append(item)
+        self.text = "dd.mm.yyyy HH:MM"
 
-            self.drop_menu.set_items(self, [i[0] for i in matching_items])
+    def on_focus__(self):
+        self.text = "  .  .       :  "
 
-            self.drop_menu.open()
+    def on_cursor_(self):
+        print(self.cursor_index())
 
-    def enter_press(self):
-        self.add_item_in_text_input("enter")
+
+class AddMatch(ScrollView):
+    def __init__(self, **kwargs):
+        super(AddMatch, self).__init__(**kwargs)
+
+        text_fields = [
+            "Stadium", "Date and time", "League", "Home team", "Guest team", "Chief referee", "First referee",
+            "Second referee", "Reserve referee"
+        ]
+
+        for name in text_fields:
+            if name == "Date and time":
+                self.ids.box.add_widget(DateTF(name, self))
+            else:
+                self.ids.box.add_widget(NoDateTF(name, self))
 
 
 class MatchTable(MDDataTable):
