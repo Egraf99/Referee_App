@@ -29,10 +29,32 @@ class DropMenu(MDDropdownMenu):
             return data
 
     def set_items(self, text_list, list_items: list):
-        self.items = [{"text": f"{x}",
-                       "viewclass": "OneLineListItem",
-                       "on_release": lambda x=f"{x}": text_list.add_item_in_text_input(x),
-                       } for x in list_items]
+        if list_items:
+            self.items = [{"text": f"{x}",
+                           "viewclass": "OneLineListItem",
+                           "on_release": lambda x=f"{x}": text_list.add_item_in_text_input(x),
+                           } for x in list_items]
+        else:
+            self.items = [{"text": "No found",
+                           "viewclass": "OneLineListItem",
+                           "on_release": lambda: None}]
+
+
+class TextField(MDTextField):
+    def __init__(self, name, scroll, **kwargs):
+        super(TextField, self).__init__(**kwargs)
+
+        self.hint_text = name
+        self.parent = scroll
+
+    def open_drop_menu(self):
+        self.parent.open_drop_menu(self)
+
+    def update_drop_menu(self):
+        self.parent.update_drop_menu(self)
+
+    def enter_press(self):
+        self.parent.enter_press()
 
 
 class AddMatch(ScrollView):
@@ -44,6 +66,10 @@ class AddMatch(ScrollView):
         self.check_text_focus = False
 
         self.drop_menu = DropMenu()
+        text_fields = ["Stadium1", "Date and time1", "Something1"]
+
+        for name in text_fields:
+            TextField(name, self)
 
     def add_item_in_text_input(self, text_item):
         self.drop_menu.caller.text = text_item

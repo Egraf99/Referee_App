@@ -51,11 +51,16 @@
                     text: 'Comming soon'
                     halign: 'center'
 
+#<TextField>:
+#    on_focus: root.open_drop_menu()
+#    on_cursor: root.update_drop_menu()
+#    on_text_validate: root.enter_press()
 
 <AddMatch>:
     size_hint_y: None
     height: "350dp"
     BoxLayout:
+        id: box
         orientation: "vertical"
         size_hint_y: None
         height: "480dp"
