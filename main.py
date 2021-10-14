@@ -42,6 +42,7 @@ class DropMenu(MDDropdownMenu):
                            "on_release": lambda: text_list.drop_menu.dismiss()}]
 
 
+
 class TextField(MDTextField):
     def __init__(self, name, scroll, **kwargs):
         super(TextField, self).__init__(**kwargs)
@@ -77,6 +78,10 @@ class NoDateTF(TextField):
 
         self.do_open_menu = True
         self.drop_menu = DropMenu()
+        text_fields = ["Stadium1", "Date and time1", "Something1"]
+
+        for name in text_fields:
+            TextField(name, self)
 
     def add_item_in_text_input(self, text_item):
         self.drop_menu.caller.text = text_item
