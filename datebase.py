@@ -25,21 +25,25 @@ class ConnDB:
 
     def take_stadium(self):
         sql = '''SELECT name FROM stadium
-                 ORDER BY name ASC'''
+                  ORDER BY name ASC'''
 
         return self.make_request(sql)
 
     def take_referee(self):
-        print("db take_referee")
-        return []
+        sql = '''SELECT second_name||' '||first_name AS name
+                   FROM referee
+                  ORDER BY name ASC'''
+        return self.make_request(sql)
 
     def take_team(self):
-        print("db take_team")
-        return []
+        sql = '''SELECT name FROM team
+                  ORDER BY name ASC'''
+        return self.make_request(sql)
 
     def take_league(self):
-        print("db take_league")
-        return []
+        sql = '''SELECT name FROM league
+                  ORDER BY name ASC'''
+        return self.make_request(sql)
 
     def make_request(self, sql):
         self.cursor = sqlite3.connect('referee.db').cursor()

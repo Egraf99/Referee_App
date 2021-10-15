@@ -69,13 +69,11 @@ class TextField(MDTextField):
         pass
 
 
-
 class NoDateTF(TextField):
     def __init__(self, name, scroll, **kwargs):
         super(NoDateTF, self).__init__(name, scroll, **kwargs)
 
         self.drop_menu = DropMenu()
-
 
     def add_item_in_text_input(self, text_item):
         self.text = text_item
