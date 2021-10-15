@@ -52,9 +52,8 @@
                     halign: 'center'
 
 <TextField>:
-    on_focus: root.on_focus_()
+    on_focus: root.check_focus()
     on_cursor: root.on_cursor_()
-    on_text_validate: root.enter_press()
 
 <AddMatch>:
     size_hint_y: None

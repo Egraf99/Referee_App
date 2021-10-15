@@ -1,3 +1,5 @@
+import re
+
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.scrollview import ScrollView
 from kivy.properties import ObjectProperty
@@ -42,7 +44,6 @@ class DropMenu(MDDropdownMenu):
                            "on_release": lambda: text_list.drop_menu.dismiss()}]
 
 
-
 class TextField(MDTextField):
     def __init__(self, name, scroll, **kwargs):
         super(TextField, self).__init__(**kwargs)
@@ -51,43 +52,36 @@ class TextField(MDTextField):
         # данный check помогает вызывать необходимые функции только при фокусе на объект
         self.check_text_focus = False
 
-        self.do_open_menu = None
-
         self.hint_text = name
         self.parent_scroll = scroll
 
-    def on_focus_(self):
+    def check_focus(self):
         if not self.check_text_focus:
-            self.on_focus__()
+            self.on_focus_()
+
         else:
             self.check_text_focus = False
 
-    def on_focus__(self):
+    def on_focus_(self):
         pass
 
     def on_cursor_(self):
         pass
 
-    def enter_press(self):
-        self.add_item_in_text_input("enter")
 
 
 class NoDateTF(TextField):
     def __init__(self, name, scroll, **kwargs):
         super(NoDateTF, self).__init__(name, scroll, **kwargs)
 
-        self.do_open_menu = True
         self.drop_menu = DropMenu()
-        text_fields = ["Stadium1", "Date and time1", "Something1"]
 
-        for name in text_fields:
-            TextField(name, self)
 
     def add_item_in_text_input(self, text_item):
-        self.drop_menu.caller.text = text_item
+        self.text = text_item
         self.drop_menu.dismiss()
 
-    def on_focus__(self):
+    def on_focus_(self):
         """Открытие всплывающего меню"""
         self.text = ""
 
@@ -100,33 +94,35 @@ class NoDateTF(TextField):
         self.drop_menu.set_items(self, [i[0] for i in items])
 
         if items:
-            self.drop_menu_open()
-
+            self.drop_menu.open()
         self.check_text_focus = True
 
-    def on_cursor_(self):
+    def insert_text(self, substring, from_undo=False):
         """Обновление всплывающего меню"""
-        if self.do_open_menu:
-            if self.check_text_focus:
-                self.drop_menu.dismiss()
+        if self.check_text_focus:
+            self.drop_menu.dismiss()
 
-                matching_items = []
+            matching_items = []
 
-                # берем текст вызывающего поля ввода для определения строк в всплывающем меню
-                type_data = self._take_type_data(self.drop_menu.caller.hint_text)
-                items = self.drop_menu.take_data(type_data)
+            # берем текст вызывающего поля ввода для определения строк в всплывающем меню
+            type_data = self._take_type_data(self.drop_menu.caller.hint_text)
+            items = self.drop_menu.take_data(type_data)
 
-                for item in items:
-                    if self.text.lower() in item[0].lower():
-                        matching_items.append(item)
+            for item in items:
+                if self.text.lower() in item[0].lower():
+                    matching_items.append(item)
 
-                self.drop_menu.set_items(self, [i[0] for i in matching_items])
-
+            self.drop_menu.set_items(self, [i[0] for i in matching_items])
             self.drop_menu.open()
+        return super(NoDateTF, self).insert_text(substring, from_undo=from_undo)
 
-    def drop_menu_open(self):
-        if self.do_open_menu:
-            self.drop_menu.open()
+    def on_text_validate(self):
+        # виджет вызывает on_focus() несколько раз,
+        # чтобы всплывающее меню не появлялось снова
+        self.check_text_focus = True
+
+        text = self.drop_menu.items[0]["text"]
+        self.add_item_in_text_input(text)
 
     @staticmethod
     def _take_type_data(hint_text: str):
@@ -150,14 +146,51 @@ class DateTF(TextField):
         super(DateTF, self).__init__(name, scroll, **kwargs)
 
         self.do_open_menu = False
+        self.first_focus = True
 
-        self.text = "dd.mm.yyyy HH:MM"
+        self.helper_text = "dd.mm.yyyy HH:MM"
+        self.helper_text_mode = "persistent"
 
-    def on_focus__(self):
-        self.text = "  .  .       :  "
+    def insert_text(self, substring, from_undo=False):
+        cursor = self.cursor_col
+        if cursor == 0:
+            s = re.sub('[^0-3]', '', substring)
+        elif cursor in [1, 4]:
+            s = re.sub('[^0-9]', '', substring) + "."
+        elif cursor == 3:
+            s = re.sub('[^0|1]', '', substring)
+        elif 5 < cursor <= 8:
+            s = re.sub('[^0-9]', '', substring)
+        elif cursor == 9:
+            s = re.sub('[^0-9]', '', substring) + " "
+        elif cursor == 11:
+            s = re.sub('[^0-2]', '', substring)
+        elif cursor == 12:
+            s = re.sub('[^0-9]', '', substring) + ":"
+        elif cursor == 13:
+            s = re.sub('^[0-6]', '', substring)
+        elif cursor in [14,15]:
+            s = re.sub('[^0-9]', '', substring)
+        else:
+            s = ''
+        return super(DateTF, self).insert_text(s, from_undo=from_undo)
+
+    def on_text_validate(self):
+        # функция on_focus() объекта TextInput срабатывает при фокусе на объект и разфокусе
+        # данный check помогает вызывать необходимые функции только при фокусе на объект
+        self.check_text_focus = True
+
+        pat = "^(0?[1-9]|[12][0-9]|3[01]).(0?[0-9]|1[012]).(19|20)?[0-9]{2} ([01][1-9]|2[0-4]):[0-6][0-9]$"
+
+        # match = re.match(pat, self.text)
+        if not re.match(pat, self.text):
+            self.text = "incorrect data or time"
+
+    def on_focus_(self):
+        self.text = ""
 
     def on_cursor_(self):
-        print(self.cursor_index())
+        pass
 
 
 class AddMatch(ScrollView):
