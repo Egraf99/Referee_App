@@ -11,6 +11,7 @@ from kivymd.uix.button import MDFlatButton
 from kivymd.uix.textfield import MDTextField
 from kivymd.uix.list import OneLineAvatarIconListItem
 from kivymd.uix.snackbar import Snackbar
+from kivy.uix.recycleview import RecycleView
 from kivymd.uix.menu import MDDropdownMenu
 from kivymd.app import MDApp
 
@@ -22,7 +23,8 @@ class DropMenu(MDDropdownMenu):
         super(DropMenu, self).__init__(**kwargs)
         self.width_mult = dp(56)
 
-    def take_data(self, mode):
+    @staticmethod
+    def take_data(mode):
         if mode:
             db_method = f"take_{mode}()"
             try:
@@ -39,13 +41,13 @@ class DropMenu(MDDropdownMenu):
                            "on_release": lambda x=f"{x}": text_list.add_item_in_text_input(x),
                            } for x in list_items]
         else:
-            self.items = [{"text": "No found",
+            self.items = [{"text": "Add in base",
                            "viewclass": "OneLineListItem",
-                           "on_release": lambda: text_list.drop_menu.dismiss()}]
+                           "on_release": lambda: text_list.dropmenu_add_data_in_db(text_list)}]
 
 
 class TextField(MDTextField):
-    def __init__(self, name, scroll, **kwargs):
+    def __init__(self, name, **kwargs):
         super(TextField, self).__init__(**kwargs)
 
         # функция on_focus() объекта TextInput срабатывает при фокусе на объект и разфокусе
@@ -53,7 +55,6 @@ class TextField(MDTextField):
         self.check_text_focus = False
 
         self.hint_text = name
-        self.parent_scroll = scroll
 
     def check_focus(self):
         if not self.check_text_focus:
@@ -70,8 +71,8 @@ class TextField(MDTextField):
 
 
 class NoDateTF(TextField):
-    def __init__(self, name, scroll, **kwargs):
-        super(NoDateTF, self).__init__(name, scroll, **kwargs)
+    def __init__(self, name, **kwargs):
+        super(NoDateTF, self).__init__(name, **kwargs)
 
         self.drop_menu = DropMenu()
 
@@ -120,7 +121,27 @@ class NoDateTF(TextField):
         self.check_text_focus = True
 
         text = self.drop_menu.items[0]["text"]
-        self.add_item_in_text_input(text)
+        if text.split()[0] == "Add":
+            self.dropmenu_add_data_in_db()
+        else:
+            self.text = text
+
+        self.drop_menu.dismiss()
+
+    def dropmenu_add_data_in_db(self):
+        mode = self._take_type_data(self.hint_text)
+
+        title = "Add " + self.hint_text.lower()
+
+        self.add_data_dialog = MDDialog(
+            title=title,
+            type="custom",
+            content_cls=AddDataContent(mode),
+            buttons=[MDFlatButton(text="CANCEL", text_color=self.theme_cls.primary_color),
+                     MDFlatButton(text="OK", text_color=self.theme_cls.primary_color)]
+        )
+        print(self.add_data_dialog.children[0])
+        self.add_data_dialog.open()
 
     @staticmethod
     def _take_type_data(hint_text: str):
@@ -139,9 +160,71 @@ class NoDateTF(TextField):
             return None
 
 
-class DateTF(TextField):
-    def __init__(self, name, scroll, **kwargs):
-        super(DateTF, self).__init__(name, scroll, **kwargs)
+class Content(RecycleView):
+    def __init__(self, **kwargs):
+        super(Content, self).__init__(**kwargs)
+
+    def _get_height(self):
+        height = len(self.items) * 53
+
+        if height > 300:
+            height = 300
+
+        return dp(height)
+
+    def _get_box_height(self):
+        height = len(self.items) * 53
+        return dp(height)
+
+
+class AddDataContent(Content):
+    def __init__(self, mode, **kwargs):
+        super(AddDataContent, self).__init__(**kwargs)
+
+        correct_mode = ["stadium", "league", "team", "referee"]
+        assert mode in correct_mode, f"Incorrect mode. Mode can be {[cm for cm in correct_mode]}"
+
+        if mode == "stadium":
+            self.items = ["Name", "City", "Address"]
+
+        elif mode == "league":
+            self.items = ["Name"]
+
+        elif mode == "team":
+            self.items = ["Name", "League"]
+
+        elif mode == "referee":
+            self.items = ["First name", "Second name", "Third name", "Phone", "Category"]
+
+        for name in self.items:
+            self.ids.box.add_widget(TextField(name))
+
+        self.height = self._get_height()
+        self.ids.box.height = self._get_box_height()
+
+
+class AddMatch(Content):
+    def __init__(self, **kwargs):
+        super(AddMatch, self).__init__(**kwargs)
+
+        self.items = [
+            "Stadium", "Date and time", "League", "Home team", "Guest team", "Chief referee", "First referee",
+            "Second referee", "Reserve referee"
+        ]
+
+        for name in self.items:
+            if name == "Date and time":
+                self.ids.box.add_widget(DateAndTimeTF(name))
+            else:
+                self.ids.box.add_widget(NoDateTF(name))
+
+        self.height = self._get_height()
+        self.ids.box.height = self._get_box_height()
+
+
+class DateAndTimeTF(TextField):
+    def __init__(self, name, **kwargs):
+        super(DateAndTimeTF, self).__init__(name, **kwargs)
 
         self.do_open_menu = False
         self.first_focus = True
@@ -167,11 +250,11 @@ class DateTF(TextField):
             s = re.sub('[^0-9]', '', substring) + ":"
         elif cursor == 13:
             s = re.sub('^[0-6]', '', substring)
-        elif cursor in [14,15]:
+        elif cursor in [14, 15]:
             s = re.sub('[^0-9]', '', substring)
         else:
             s = ''
-        return super(DateTF, self).insert_text(s, from_undo=from_undo)
+        return super(DateAndTimeTF, self).insert_text(s, from_undo=from_undo)
 
     def on_text_validate(self):
         # функция on_focus() объекта TextInput срабатывает при фокусе на объект и разфокусе
@@ -180,7 +263,6 @@ class DateTF(TextField):
 
         pat = "^(0?[1-9]|[12][0-9]|3[01]).(0?[0-9]|1[012]).(19|20)?[0-9]{2} ([01][1-9]|2[0-4]):[0-6][0-9]$"
 
-        # match = re.match(pat, self.text)
         if not re.match(pat, self.text):
             self.text = "incorrect data or time"
 
@@ -189,22 +271,6 @@ class DateTF(TextField):
 
     def on_cursor_(self):
         pass
-
-
-class AddMatch(ScrollView):
-    def __init__(self, **kwargs):
-        super(AddMatch, self).__init__(**kwargs)
-
-        text_fields = [
-            "Stadium", "Date and time", "League", "Home team", "Guest team", "Chief referee", "First referee",
-            "Second referee", "Reserve referee"
-        ]
-
-        for name in text_fields:
-            if name == "Date and time":
-                self.ids.box.add_widget(DateTF(name, self))
-            else:
-                self.ids.box.add_widget(NoDateTF(name, self))
 
 
 class MatchTable(MDDataTable):
@@ -270,7 +336,7 @@ class GameScreen(BoxLayout):
             pass
 
     def pop_dialog_add_match(self):
-        self.dialog = MDDialog(
+        self.add_game_dialog = MDDialog(
             auto_dismiss=False,
             title="Add game",
             type="custom",
@@ -279,14 +345,14 @@ class GameScreen(BoxLayout):
                      MDFlatButton(text="ADD", on_release=self.update_match_db), ]
         )
 
-        self.dialog.open()
+        self.add_game_dialog.open()
 
     def update_match_db(self, event):
-        print(self.dialog.content_cls.children)
+        print(self.add_game_dialog.content_cls.children)
 
     def dismiss_dialog(self, event):
         print(main)
-        self.dialog.dismiss()
+        self.add_game_dialog.dismiss()
 
 
 class MainApp(MDApp):
