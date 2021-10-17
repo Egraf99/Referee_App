@@ -21,38 +21,74 @@ class ConnDB:
                         INNER JOIN Referee AS rr ON Games.referee_reserve = rr.id
                   ORDER BY date ASC'''
 
-        return self.make_request(sql)
+        return self.select_request(sql)
 
     def take_stadium(self):
         sql = '''SELECT name FROM stadium
                   ORDER BY name ASC'''
 
-        return self.make_request(sql)
+        return self.select_request(sql)
 
     def take_referee(self):
         sql = '''SELECT second_name||' '||first_name AS name
                    FROM referee
                   ORDER BY name ASC'''
-        return self.make_request(sql)
+        return self.select_request(sql)
 
     def take_team(self):
         sql = '''SELECT name FROM team
                   ORDER BY name ASC'''
-        return self.make_request(sql)
+        return self.select_request(sql)
 
     def take_league(self):
         sql = '''SELECT name FROM league
                   ORDER BY name ASC'''
-        return self.make_request(sql)
+        return self.select_request(sql)
 
-    def make_request(self, sql):
+    def take_category(self):
+        sql = '''SELECT name FROM category
+                  ORDER BY name ASC'''
+        return self.select_request(sql)
+
+    def take_city(self):
+        sql = '''SELECT name FROM city
+                ORDER BY name ASC'''
+
+        return self.select_request(sql)
+
+    def insert(self, table, data: dict):
+        column = ','.join(d.lower() for d in data.keys())
+        count_values = ','.join('?' * len(data.values()))
+        values = [d for d in data.values()]
+
+        sql = f'''INSERT INTO {table}({column}) VALUES ({count_values}); '''
+
+        print(sql, values)
+
+        # self.insert_request(sql, values)
+
+    def take_id(self, table, name):
+        sql = f'''SELECT id FROM {table} WHERE name = "{name}"'''
+
+        return self.select_request(sql, one=True)
+
+    def select_request(self, sql, one=False):
         self.cursor = sqlite3.connect('referee.db').cursor()
         self.cursor.execute(sql)
-        games = self.cursor.fetchall()
+        if one:
+            games = self.cursor.fetchone()
+        else:
+            games = self.cursor.fetchall()
 
         self.cursor.close()
 
         return games
+
+    def insert_request(self, sql, values):
+        self.conn = sqlite3.connect('referee.db')
+        self.cur = self.conn.cursor()
+        self.cur.execute(sql, values)
+        self.conn.commit()
 
 
 if __name__ == '__main__':

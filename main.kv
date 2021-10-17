@@ -63,17 +63,3 @@
         id: box
         orientation: "vertical"
         size_hint_y: None
-
-<MatchTable>:
-    cell_size: 30
-    use_pagination: False
-    check: True
-    column_data:
-        [('Дата', 28),
-        ('Время', 12),
-        ('Лига', self.cell_size),
-        ('Стадион', self.cell_size),
-        ('Хозяева', self.cell_size),
-        ('Гости', self.cell_size),
-        ('Фамилия', self.cell_size)]
-    row_data: root.take_games
