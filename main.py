@@ -38,23 +38,28 @@ def is_notnull_text_field(name) -> bool:
     return True if re.search(' notnull', name) else False
 
 
+def open_dialog(text):
+    MDDialog(text=text).open()
+
+
+def update_match_db(table, fields):
+    data = {}
+    for field in fields:
+        if field.is_notnull and not field.text:
+            open_dialog("Not all necessary lines are filed in")
+            return
+
+        elif is_drop_text_field(field.text):
+            # поле, имеющее всплывающее окно записывется в БД через id
+            data[field.about] = DB.take_id(field.about, field.text)
+
+        else:  # поля не пустые и без выпадающего окна
+            data[field.about] = field.text
+    DB.insert(table=table, data=data)
+
+
 class Dialog(MDDialog):
-    @staticmethod
-    def update_match_db(table, fields):
-        data = {}
-        for field in fields:
-            print(field.about, field.is_notnull)
-            if field.is_notnull and not field.text:
-                MDDialog(
-                    text="Not all necessary lines are filed in",
-                    radius=[20, 7, 20, 7]
-                ).open()
-                return
-            elif is_drop_text_field(field.text):
-                data[field.about] = DB.take_id(field.about, field.text)
-            else:  # поля не пустые и без выпадающего окна
-                data[field.about] = field.text
-        DB.insert(table=table, data=data)
+    pass
 
 
 class GameScreen(BoxLayout):
@@ -62,47 +67,52 @@ class GameScreen(BoxLayout):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.create_main_page()
 
-    def create_main_page(self):
+        self.add_game_dialog = ObjectProperty()
+
+        # при первом включении необходимо показать контент
+        self._create_main_page()
+
+    def _create_main_page(self):
         self.games_layout.clear_widgets()
-
         self.games_layout.add_widget(MatchTable())
 
     def add_button_callback(self, instance):
-        print("\ncheck for phone...", end="")
+        """Вызывается при нажатии на одну из кнопок MDFloatingActionButtonSpeedDial.
+         Проверяет нажатую кнопку и открывает необходимый Dialog"""
+
+        # пока что работае то одна кнопка из трех
         if instance.icon == "cookie-plus-outline":
-            print("done\n")
             self.pop_dialog_add_match()
-        elif instance.icon == "":
-            pass
-        elif instance.icon == "":
-            pass
 
     def pop_dialog_add_match(self):
+        """Открывает Dialog для добавления новой игры"""
         self.add_game_dialog = Dialog(
             auto_dismiss=False,
             title="Add game",
             type="custom",
-            content_cls=AddMatch(),
+            content_cls=AddDataContent(mode="match"),
             buttons=[MDFlatButton(text="CANCEL", on_release=self.dismiss_dialog),
                      MDFlatButton(text="ADD", on_release=self.update_match_db)]
         )
 
         self.add_game_dialog.open()
 
-    def update_match_db(self, event=None):
+    def update_match_db(self, event):
+        """Вызывается при нажатии на кнопку ADD. Передает поля ввода и название обновляемой таблицы в функцию
+        обновления БД """
         table = self.add_game_dialog.title.replace('Add', '')
         fields = self.add_game_dialog.content_cls.ids.box.children
 
-        self.add_game_dialog.update_match_db(table, fields)
+        update_match_db(table, fields)
 
     def dismiss_dialog(self, event):
-        print(main)
+        """Закрывает Dialog"""
         self.add_game_dialog.dismiss()
 
 
 class MatchTable(MDDataTable):
+    """Класс таблицы для игр"""
     def __init__(self, **kwargs):
         self.cell_size = dp(25)
         self.use_pagination = False
@@ -115,11 +125,12 @@ class MatchTable(MDDataTable):
                             ('Гости', self.cell_size),
                             ('Фамилия', self.cell_size)]
 
-        self.row_data = self.take_games
+        self.row_data = self._take_games
         super(MatchTable, self).__init__(**kwargs)
 
     @property
-    def take_games(self):
+    def _take_games(self) -> list:
+        """Возвращает преобразованные в табличные значения данные из БД"""
         games = DB.take_games()
 
         list_of_games = []
@@ -134,6 +145,7 @@ class MatchTable(MDDataTable):
         return list_of_games
 
     def _time_int_in_str(self, time: int) -> str:
+        """Преобразует значние времени взятое из базы данных в виде 4-х целых чисел в формат HH:MM"""
         hour, minute = time // 100, time % 100
 
         hour = self._change_if_less_ten(hour)
@@ -142,6 +154,7 @@ class MatchTable(MDDataTable):
         return f'{hour}:{minute}'
 
     def _date_list_in_str(self, date: list) -> str:
+        """Преобразует значние даты взятое из базы данных в виде 4-х целых чисел в формат DD.MM.YYYY"""
         year, month, day = date
 
         day = self._change_if_less_ten(day)
@@ -151,6 +164,7 @@ class MatchTable(MDDataTable):
 
     @staticmethod
     def _change_if_less_ten(number):
+        """Преобразует значение меньше 10 в формат 0_"""
         if int(number) < 10:
             number = f'0{number}'
 
@@ -165,7 +179,11 @@ class DropMenu(MDDropdownMenu):
         self.box = BoxLayout(orientation="vertical")
 
     @staticmethod
-    def take_data(mode):
+    def take_data(mode: str):
+        """Возвращает значение из БД с помощью функций класса DB.
+
+         :argument mode (str) - из какой таблицы брать значения. В классе DB должен быть метод take_{mode}"""
+
         if mode:
             db_method = f"take_{mode}()"
             try:
@@ -176,6 +194,7 @@ class DropMenu(MDDropdownMenu):
         return []
 
     def set_items(self, text_list, list_items: list):
+        """Добавляет items в DropMenu."""
         if list_items:
             self.items = [{"text": f"{x}",
                            "viewclass": "OneLineListItem",
@@ -193,6 +212,7 @@ class Content(RecycleView):
         super(Content, self).__init__(**kwargs)
 
     def _get_height(self):
+        """Устанавливает высоту Content в зависимости от количества items."""
         height = len(self.items) * 50
 
         if height > 300:
@@ -201,6 +221,7 @@ class Content(RecycleView):
         return dp(height)
 
     def _get_box_height(self):
+        """Устанавливает высоту BoxLayout в зависимости от количества items."""
         height = len(self.items) * 53
         return dp(height)
 
@@ -209,7 +230,22 @@ class AddDataContent(Content):
     def __init__(self, mode, **kwargs):
         super(AddDataContent, self).__init__(**kwargs)
 
-        if mode == "stadium":
+        self._set_items(mode)
+
+        self._add_item_in_boxlayout()
+
+        self.height = self._get_height()
+        self.ids.box.height = self._get_box_height()
+
+    def _set_items(self, mode: str):
+        """Устанавливает items в зависимости от mode."""
+        if mode == "match":
+            self.items = [
+                "Stadium drop notnull", "Date and time notnull", "League drop notnull", "Home team drop notnull",
+                "Guest team drop notnull", "Chief referee drop notnull", "First referee drop",
+                "Second referee drop", "Reserve referee drop"
+            ]
+        elif mode == "stadium":
             self.items = ["Name notnull", "City drop notnull", "Address notnull"]
 
         elif mode == "referee":
@@ -221,26 +257,8 @@ class AddDataContent(Content):
         else:
             raise AttributeError(f"Для добавления {mode} не известны названия полей")
 
-        for name in self.items:
-            if is_drop_text_field(name):
-                self.ids.box.add_widget(TFWithDrop(name))
-            else:
-                self.ids.box.add_widget(TFWithoutDrop(name))
-
-        self.height = self._get_height()
-        self.ids.box.height = self._get_box_height()
-
-
-class AddMatch(Content):
-    def __init__(self, **kwargs):
-        super(AddMatch, self).__init__(**kwargs)
-
-        self.items = [
-            "Stadium drop notnull", "Date and time notnull", "League drop notnull", "Home team drop notnull",
-            "Guest team drop notnull", "Chief referee drop notnull", "First referee drop",
-            "Second referee drop", "Reserve referee drop"
-        ]
-
+    def _add_item_in_boxlayout(self):
+        """Добавляет items в BoxLayout."""
         for name in self.items:
             if "Date and time" in name:
                 self.ids.box.add_widget(DateAndTimeTF(name))
@@ -249,12 +267,8 @@ class AddMatch(Content):
             else:
                 self.ids.box.add_widget(TFWithoutDrop(name))
 
-        self.height = self._get_height()
-        self.ids.box.height = self._get_box_height()
-
 
 class TextField(MDTextField):
-
     def __init__(self, name, **kwargs):
         super(TextField, self).__init__(**kwargs)
 
@@ -295,6 +309,7 @@ class TFWithoutDrop(TextField):
         # данный check помогает вызывать необходимые функции только при фокусе на объект
         self.check_text_focus = True
 
+
 class DateAndTimeTF(TFWithoutDrop):
     def __init__(self, name, **kwargs):
         super(DateAndTimeTF, self).__init__(name, **kwargs)
@@ -304,27 +319,16 @@ class DateAndTimeTF(TFWithoutDrop):
 
     def insert_text(self, substring, from_undo=False):
         cursor = self.cursor_col
-        if cursor == 0:
-            s = re.sub('[^0-3]', '', substring)
-        elif cursor in [1, 4]:
-            s = re.sub('[^0-9]', '', substring) + "."
-        elif cursor == 3:
-            s = re.sub('[^0|1]', '', substring)
-        elif 5 < cursor <= 8:
-            s = re.sub('[^0-9]', '', substring)
+
+        if cursor in [1, 4]:
+            substring += "."
         elif cursor == 9:
-            s = re.sub('[^0-9]', '', substring) + " "
-        elif cursor == 11:
-            s = re.sub('[^0-2]', '', substring)
+            substring += " "
         elif cursor == 12:
-            s = re.sub('[^0-9]', '', substring) + ":"
-        elif cursor == 13:
-            s = re.sub('^[0-6]', '', substring)
-        elif cursor in [14, 15]:
-            s = re.sub('[^0-9]', '', substring)
-        else:
-            s = ''
-        return super(DateAndTimeTF, self).insert_text(s, from_undo=from_undo)
+            substring += ":"
+        elif cursor > 15:
+            substring = ''
+        return super(DateAndTimeTF, self).insert_text(substring, from_undo=from_undo)
 
     def on_text_validate(self):
         # функция on_focus() объекта TextInput срабатывает при фокусе на объект и разфокусе
@@ -437,7 +441,6 @@ class TFWithDrop(TextField):
         text_fields = self.add_data_dialog.content_cls.ids.box.children
         data = {}
         for tf in text_fields:
-            print(tf.about, tf.id)
             if tf.id:  # необходимо добавить в базу данных id, а не text
                 value = take_id_from_name(tf.about.lower(), tf.text)
                 data[tf.about] = value[0]

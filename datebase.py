@@ -56,6 +56,11 @@ class ConnDB:
 
         return self.select_request(sql)
 
+    def take_id(self, table, name):
+        sql = f'''SELECT id FROM {table} WHERE name = "{name}"'''
+
+        return self.select_request(sql, one=True)
+
     def insert(self, table, data: dict):
         # убираем пустые значения и заменяем пробелы на нижние подчеркивания
         data = {k.replace(' ', '_').lower(): v for k, v in data.items() if v}
@@ -82,11 +87,6 @@ class ConnDB:
             _data = {'day': day, 'month': month, 'year': year, 'time': time}
             for i in _data:
                 data[i] = _data[i]
-
-    def take_id(self, table, name):
-        sql = f'''SELECT id FROM {table} WHERE name = "{name}"'''
-
-        return self.select_request(sql, one=True)
 
     def select_request(self, sql, one=False):
         self.cursor = sqlite3.connect('referee.db').cursor()
