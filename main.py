@@ -30,7 +30,31 @@ def take_id_from_name(table, name):
 def is_drop_text_field(name) -> bool:
     """Проверяет, нужно ли для данного поля всплывающее меню"""
     #  - часть "drop" или "id" значит, что при взаимодействии с полем ввода открывается всплывающее окно
-    return True if re.search('( id)|( drop)', name) else False
+    return True if re.search(' drop', name) else False
+
+
+def is_notnull_text_field(name) -> bool:
+    """Проверяет, должно ли быть поле обязательно заполненым"""
+    return True if re.search(' notnull', name) else False
+
+
+class Dialog(MDDialog):
+    @staticmethod
+    def update_match_db(table, fields):
+        data = {}
+        for field in fields:
+            print(field.about, field.is_notnull)
+            if field.is_notnull and not field.text:
+                MDDialog(
+                    text="Not all necessary lines are filed in",
+                    radius=[20, 7, 20, 7]
+                ).open()
+                return
+            elif is_drop_text_field(field.text):
+                data[field.about] = DB.take_id(field.about, field.text)
+            else:  # поля не пустые и без выпадающего окна
+                data[field.about] = field.text
+        DB.insert(table=table, data=data)
 
 
 class GameScreen(BoxLayout):
@@ -56,19 +80,22 @@ class GameScreen(BoxLayout):
             pass
 
     def pop_dialog_add_match(self):
-        self.add_game_dialog = MDDialog(
+        self.add_game_dialog = Dialog(
             auto_dismiss=False,
             title="Add game",
             type="custom",
             content_cls=AddMatch(),
             buttons=[MDFlatButton(text="CANCEL", on_release=self.dismiss_dialog),
-                     MDFlatButton(text="ADD", on_release=self.update_match_db), ]
+                     MDFlatButton(text="ADD", on_release=self.update_match_db)]
         )
 
         self.add_game_dialog.open()
 
-    def update_match_db(self, event):
-        print(self.add_game_dialog.content_cls.children)
+    def update_match_db(self, event=None):
+        table = self.add_game_dialog.title.replace('Add', '')
+        fields = self.add_game_dialog.content_cls.ids.box.children
+
+        self.add_game_dialog.update_match_db(table, fields)
 
     def dismiss_dialog(self, event):
         print(main)
@@ -135,6 +162,7 @@ class DropMenu(MDDropdownMenu):
     def __init__(self, **kwargs):
         super(DropMenu, self).__init__(**kwargs)
         self.width_mult = dp(56)
+        self.box = BoxLayout(orientation="vertical")
 
     @staticmethod
     def take_data(mode):
@@ -156,7 +184,7 @@ class DropMenu(MDDropdownMenu):
         else:
             self.items = [{"text": "Add in base",
                            "viewclass": "OneLineListItem",
-                           "on_release": lambda: text_list.dropmenu_add_data_in_db(text_list)}]
+                           "on_release": lambda: text_list.dropmenu_add_data_in_db_and_close()}]
 
 
 class Content(RecycleView):
@@ -182,13 +210,13 @@ class AddDataContent(Content):
         super(AddDataContent, self).__init__(**kwargs)
 
         if mode == "stadium":
-            self.items = ["Name", "City id drop", "Address"]
+            self.items = ["Name notnull", "City drop notnull", "Address notnull"]
 
         elif mode == "referee":
-            self.items = ["First name", "Second name", "Third name", "Phone", "Category id drop"]
+            self.items = ["First name notnull", "Second name notnull", "Third name", "Phone", "Category drop notnull"]
 
         elif mode in ["league", "team", "category", "city"]:
-            self.items = ["Name"]
+            self.items = ["Name notnull"]
 
         else:
             raise AttributeError(f"Для добавления {mode} не известны названия полей")
@@ -208,13 +236,13 @@ class AddMatch(Content):
         super(AddMatch, self).__init__(**kwargs)
 
         self.items = [
-            "Stadium drop id", "Date and time", "League drop id", "Home team drop id",
-            "Guest team drop id", "Chief referee drop id", "First referee drop id",
-            "Second referee drop id", "Reserve referee drop id"
+            "Stadium drop notnull", "Date and time notnull", "League drop notnull", "Home team drop notnull",
+            "Guest team drop notnull", "Chief referee drop notnull", "First referee drop",
+            "Second referee drop", "Reserve referee drop"
         ]
 
         for name in self.items:
-            if name == "Date and time":
+            if "Date and time" in name:
                 self.ids.box.add_widget(DateAndTimeTF(name))
             elif is_drop_text_field(name):
                 self.ids.box.add_widget(TFWithDrop(name))
@@ -230,15 +258,19 @@ class TextField(MDTextField):
     def __init__(self, name, **kwargs):
         super(TextField, self).__init__(**kwargs)
 
-        # print(self.focus_next)
-        # print(self.focus_previous)
-
         # функция on_focus() объекта TextInput срабатывает при фокусе на объект и разфокусе
         # данный check помогает вызывать необходимые функции только при фокусе на объект
         self.check_text_focus = False
 
-        # убираем "id" и "drop", если есть
-        self.hint_text = re.sub('( id)|( drop)', '', name)
+        self.id = False
+
+        self.is_notnull = is_notnull_text_field(name)
+
+        # убираем "drop" и "notnull", если есть
+        name = re.sub('( drop)|( notnull)', '', name)
+        self.about = name
+
+        self.hint_text = "! " + name if self.is_notnull else name
 
     def check_focus(self):
         if not self.check_text_focus:
@@ -248,7 +280,7 @@ class TextField(MDTextField):
             self.check_text_focus = False
 
     def on_focus_(self):
-        pass
+        self.text = ""
 
     def on_cursor_(self):
         pass
@@ -258,9 +290,10 @@ class TFWithoutDrop(TextField):
     def __init__(self, name, **kwargs):
         super(TFWithoutDrop, self).__init__(name, **kwargs)
 
-    def on_focus_(self):
-        self.text = ""
-
+    def on_text_validate(self):
+        # функция on_focus() объекта TextInput срабатывает при фокусе на объект и разфокусе
+        # данный check помогает вызывать необходимые функции только при фокусе на объект
+        self.check_text_focus = True
 
 class DateAndTimeTF(TFWithoutDrop):
     def __init__(self, name, **kwargs):
@@ -303,13 +336,12 @@ class DateAndTimeTF(TFWithoutDrop):
         if not re.match(pat, self.text):
             self.text = "incorrect data or time"
 
-    def on_focus_(self):
-        self.text = ""
-
 
 class TFWithDrop(TextField):
     def __init__(self, name, **kwargs):
         super(TFWithDrop, self).__init__(name, **kwargs)
+
+        self.id = True
 
         self.drop_menu = DropMenu()
 
@@ -325,7 +357,7 @@ class TFWithDrop(TextField):
         self.drop_menu.caller = self
 
         # берем текст вызывающего поля ввода для определения строк в всплывающем меню
-        type_data = self._take_type_data(self.drop_menu.caller.hint_text)
+        type_data = self._take_type_data(self.drop_menu.caller.about)
         items = self.drop_menu.take_data(type_data)
         self.drop_menu.set_items(self, [i[0] for i in items])
 
@@ -333,30 +365,39 @@ class TFWithDrop(TextField):
             self.drop_menu.open()
         self.check_text_focus = True
 
-    def insert_text(self, substring, from_undo=False):
-        """Обновление всплывающего меню"""
+    def do_backspace(self, from_undo=False, mode='bkspc'):
+        """Обновление всплывающего меню при удалении текста"""
         if self.check_text_focus:
-            self.drop_menu.dismiss()
+            self.update_dropmenu()
+        super(TFWithDrop, self).do_backspace(from_undo=from_undo, mode=mode)
 
-            matching_items = []
+    def insert_text(self, substring, from_undo=False):
+        """Обновление всплывающего меню при вводе текста"""
+        if self.check_text_focus:
+            self.update_dropmenu()
 
-            # берем текст вызывающего поля ввода для определения строк в всплывающем меню
-            type_data = self._take_type_data(self.drop_menu.caller.hint_text)
-            items = self.drop_menu.take_data(type_data)
-
-            for item in items:
-                if self.text.lower() in item[0].lower():
-                    matching_items.append(item)
-
-            self.drop_menu.set_items(self, [i[0] for i in matching_items])
-            self.drop_menu.open()
             super(TFWithDrop, self).insert_text(substring, from_undo=from_undo)
+
+    def update_dropmenu(self):
+        self.drop_menu.dismiss()
+
+        matching_items = []
+
+        # берем текст вызывающего поля ввода для определения строк в всплывающем меню
+        type_data = self._take_type_data(self.drop_menu.caller.about)
+        items = self.drop_menu.take_data(type_data)
+
+        for item in items:
+            if self.text.lower() in item[0].lower():
+                matching_items.append(item)
+
+        self.drop_menu.set_items(self, [i[0] for i in matching_items])
+        self.drop_menu.open()
 
     def on_text_validate(self):
         # виджет вызывает on_focus() несколько раз,
         # чтобы всплывающее меню не появлялось снова
         self.check_text_focus = True
-        print('press')
 
         text = self.drop_menu.items[0]["text"]
         if text.split()[0] == "Add":
@@ -366,12 +407,16 @@ class TFWithDrop(TextField):
 
         self.drop_menu.dismiss()
 
+    def dropmenu_add_data_in_db_and_close(self):
+        self.dropmenu_add_data_in_db()
+        self.drop_menu.dismiss()
+
     def dropmenu_add_data_in_db(self):
-        mode = self._take_type_data(self.hint_text)
+        mode = self._take_type_data(self.about)
 
-        title = "Add " + self.hint_text.lower()
+        title = "Add " + self.about.lower()
 
-        self.add_data_dialog = MDDialog(
+        self.add_data_dialog = Dialog(
             title=title,
             type="custom",
             content_cls=AddDataContent(mode),
@@ -392,11 +437,12 @@ class TFWithDrop(TextField):
         text_fields = self.add_data_dialog.content_cls.ids.box.children
         data = {}
         for tf in text_fields:
+            print(tf.about, tf.id)
             if tf.id:  # необходимо добавить в базу данных id, а не text
-                value = take_id_from_name(tf.hint_text.lower(), tf.text)
-                data[tf.hint_text] = value[0]
+                value = take_id_from_name(tf.about.lower(), tf.text)
+                data[tf.about] = value[0]
             else:
-                data[tf.hint_text] = tf.text
+                data[tf.about] = tf.text
 
         return data
 
@@ -404,17 +450,17 @@ class TFWithDrop(TextField):
         self.add_data_dialog.dismiss()
 
     @staticmethod
-    def _take_type_data(hint_text: str):
-        hint_text_list = hint_text.lower().split()
+    def _take_type_data(about: str):
+        about_list = about.lower().split()
 
-        if hint_text_list[0] == "date":
+        if about_list[0] == "date":
             return None
 
-        if len(hint_text_list) == 2:
-            return hint_text_list[1]
+        if len(about_list) == 2:
+            return about_list[1]
 
-        elif len(hint_text_list) == 1:
-            return hint_text_list[0]
+        elif len(about_list) == 1:
+            return about_list[0]
 
         else:
             return None

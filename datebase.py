@@ -57,7 +57,12 @@ class ConnDB:
         return self.select_request(sql)
 
     def insert(self, table, data: dict):
-        column = ','.join(d.lower() for d in data.keys())
+        # убираем пустые значения и заменяем пробелы на нижние подчеркивания
+        data = {k.replace(' ', '_').lower(): v for k, v in data.items() if v}
+
+        self._convert_date(data)
+
+        column = ','.join(d for d in data.keys())
         count_values = ','.join('?' * len(data.values()))
         values = [d for d in data.values()]
 
@@ -66,6 +71,17 @@ class ConnDB:
         print(sql, values)
 
         # self.insert_request(sql, values)
+
+    def _convert_date(self, data):
+        if "date_and_time" in data.keys():
+            # year, day, month, time
+            date = data.pop("date_and_time").split(" ")
+            day, month, year = date[0].split(".")
+            time = date[1].replace(':', '')
+
+            _data = {'day': day, 'month': month, 'year': year, 'time': time}
+            for i in _data:
+                data[i] = _data[i]
 
     def take_id(self, table, name):
         sql = f'''SELECT id FROM {table} WHERE name = "{name}"'''
@@ -92,4 +108,7 @@ class ConnDB:
 
 
 if __name__ == '__main__':
-    print(ConnDB().take_games())
+    print(ConnDB().insert('game',
+                          {'chief_referee': 'Ходин Егор', 'guest_team': 'Смена-2', 'home_team': 'Смена-2',
+                           'league': 'ЛФК А',
+                           'date_and_time': '12.04.2021 15:00', 'stadium': 'Сапсан Арена'}))
