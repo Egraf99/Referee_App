@@ -58,14 +58,18 @@ class ConnDB:
 
     def take_id(self, table, name):
         sql = f'''SELECT id FROM {table} WHERE name = "{name}"'''
+        return self.select_request(sql, one=True)
 
+    def take_id_from_referee(self, table, first_name, second_name):
+        sql = f'''SELECT id FROM {table} WHERE first_name = "{first_name}" AND second_name = "{second_name}"'''
         return self.select_request(sql, one=True)
 
     def insert(self, table, data: dict):
+        print(table, data)
         # убираем пустые значения и заменяем пробелы на нижние подчеркивания
-        data = {k.replace(' ', '_').lower(): v for k, v in data.items() if v}
+        data = {k: v for k, v in data.items() if v}
 
-        self._convert_date(data)
+        self._convert_special_date(data)
 
         column = ','.join(d for d in data.keys())
         count_values = ','.join('?' * len(data.values()))
@@ -77,7 +81,8 @@ class ConnDB:
 
         # self.insert_request(sql, values)
 
-    def _convert_date(self, data):
+    def _convert_special_date(self, data):
+        """Преаобразует специальные поля (дата, время, телефон) в формат значений БД."""
         if "date_and_time" in data.keys():
             # year, day, month, time
             date = data.pop("date_and_time").split(" ")
@@ -87,6 +92,16 @@ class ConnDB:
             _data = {'day': day, 'month': month, 'year': year, 'time': time}
             for i in _data:
                 data[i] = _data[i]
+
+        if "phone" in data.keys():
+            # в телефоне оставляем только числа
+            phone_ = ''
+            phone = data.pop("phone")
+            for symbol in phone:
+                if symbol.isdigit():
+                    phone_ += symbol
+
+            data['phone'] = int(phone_)
 
     def select_request(self, sql, one=False):
         self.cursor = sqlite3.connect('referee.db').cursor()
