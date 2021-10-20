@@ -19,47 +19,8 @@ from kivymd.app import MDApp
 from datebase import ConnDB
 
 
-def add_data_in_db(table, data):
-    DB.insert(table, data)
-
-
-def take_id_from_name(table, name):
-    return DB.take_id(table, name)
-
-
-def is_drop_text_field(name) -> bool:
-    """Проверяет, нужно ли для данного поля всплывающее меню"""
-    #  - часть "drop" или "id" значит, что при взаимодействии с полем ввода открывается всплывающее окно
-    return True if re.search(' drop', name) else False
-
-
-def is_notnull_text_field(name) -> bool:
-    """Проверяет, должно ли быть поле обязательно заполненым"""
-    return True if re.search(' notnull', name) else False
-
-
 def open_dialog(text):
     MDDialog(text=text).open()
-
-
-def update_match_db(table, fields):
-    data = {}
-    for field in fields:
-        if field.is_notnull and not field.text:
-            open_dialog("Not all necessary lines are filed in")
-            return
-
-        elif is_drop_text_field(field.text):
-            # поле, имеющее всплывающее окно записывется в БД через id
-            data[field.about] = DB.take_id(field.about, field.text)
-
-        else:  # поля не пустые и без выпадающего окна
-            data[field.about] = field.text
-    DB.insert(table=table, data=data)
-
-
-class Dialog(MDDialog):
-    pass
 
 
 class GameScreen(BoxLayout):
@@ -79,40 +40,37 @@ class GameScreen(BoxLayout):
 
     def add_button_callback(self, instance):
         """Вызывается при нажатии на одну из кнопок MDFloatingActionButtonSpeedDial.
-         Проверяет нажатую кнопку и открывает необходимый Dialog"""
+         Проверяет нажатую кнопку и открывает необходимый Dialog."""
 
-        # пока что работае то одна кнопка из трех
+        # пока что работает одна кнопка из трех
         if instance.icon == "cookie-plus-outline":
             self.pop_dialog_add_match()
 
     def pop_dialog_add_match(self):
-        """Открывает Dialog для добавления новой игры"""
-        self.add_game_dialog = Dialog(
+        """Открывает Dialog для добавления новой игры."""
+        self.add_game_dialog = MDDialog(
             auto_dismiss=False,
             title="Add game",
             type="custom",
-            content_cls=AddDataContent(mode="match"),
+            content_cls=AddDataContent(type_="game"),
             buttons=[MDFlatButton(text="CANCEL", on_release=self.dismiss_dialog),
-                     MDFlatButton(text="ADD", on_release=self.update_match_db)]
+                     MDFlatButton(text="ADD", on_release=self.update_db)]
         )
 
         self.add_game_dialog.open()
 
-    def update_match_db(self, event):
-        """Вызывается при нажатии на кнопку ADD. Передает поля ввода и название обновляемой таблицы в функцию
-        обновления БД """
-        table = self.add_game_dialog.title.replace('Add', '')
-        fields = self.add_game_dialog.content_cls.ids.box.children
-
-        update_match_db(table, fields)
+    def update_db(self, event):
+        """Вызывается при нажатии на кнопку ADD."""
+        self.add_game_dialog.content_cls.update_db()
 
     def dismiss_dialog(self, event):
-        """Закрывает Dialog"""
+        """Закрывает Dialog."""
         self.add_game_dialog.dismiss()
 
 
 class MatchTable(MDDataTable):
-    """Класс таблицы для игр"""
+    """Класс таблицы для игр."""
+
     def __init__(self, **kwargs):
         self.cell_size = dp(25)
         self.use_pagination = False
@@ -122,30 +80,29 @@ class MatchTable(MDDataTable):
                             ('Лига', self.cell_size),
                             ('Стадион', self.cell_size),
                             ('Хозяева', self.cell_size),
-                            ('Гости', self.cell_size),
-                            ('Фамилия', self.cell_size)]
+                            ('Гости', self.cell_size)]
 
         self.row_data = self._take_games
         super(MatchTable, self).__init__(**kwargs)
 
     @property
     def _take_games(self) -> list:
-        """Возвращает преобразованные в табличные значения данные из БД"""
+        """Возвращает преобразованные в табличные значения данные из БД."""
         games = DB.take_games()
 
         list_of_games = []
         for game_info in games:
-            league, date, time, stadium, team_home, team_guest, referee = game_info[:7]
+            league, date, time, stadium, team_home, team_guest = game_info[:6]
 
             date = self._date_list_in_str(date.split())
             time = self._time_int_in_str(time)
 
-            list_of_games.append([date, time, league, stadium, team_home, team_guest, referee])
+            list_of_games.append([date, time, league, stadium, team_home, team_guest])
 
         return list_of_games
 
     def _time_int_in_str(self, time: int) -> str:
-        """Преобразует значние времени взятое из базы данных в виде 4-х целых чисел в формат HH:MM"""
+        """Преобразует значние времени взятое из базы данных в виде 4-х целых чисел в формат HH:MM."""
         hour, minute = time // 100, time % 100
 
         hour = self._change_if_less_ten(hour)
@@ -154,7 +111,7 @@ class MatchTable(MDDataTable):
         return f'{hour}:{minute}'
 
     def _date_list_in_str(self, date: list) -> str:
-        """Преобразует значние даты взятое из базы данных в виде 4-х целых чисел в формат DD.MM.YYYY"""
+        """Преобразует значние даты взятое из базы данных в виде 4-х целых чисел в формат DD.MM.YYYY."""
         year, month, day = date
 
         day = self._change_if_less_ten(day)
@@ -164,7 +121,7 @@ class MatchTable(MDDataTable):
 
     @staticmethod
     def _change_if_less_ten(number):
-        """Преобразует значение меньше 10 в формат 0_"""
+        """Преобразует значение меньше 10 в формат 0_."""
         if int(number) < 10:
             number = f'0{number}'
 
@@ -172,20 +129,19 @@ class MatchTable(MDDataTable):
 
 
 class DropMenu(MDDropdownMenu):
-
     def __init__(self, **kwargs):
         super(DropMenu, self).__init__(**kwargs)
         self.width_mult = dp(56)
         self.box = BoxLayout(orientation="vertical")
 
     @staticmethod
-    def take_data(mode: str):
+    def take_data(name_table: str):
         """Возвращает значение из БД с помощью функций класса DB.
 
-         :argument mode (str) - из какой таблицы брать значения. В классе DB должен быть метод take_{mode}"""
+         :argument name_table (str) - из какой таблицы брать значения. В классе DB должен быть метод take_{mode}."""
 
-        if mode:
-            db_method = f"take_{mode}()"
+        if name_table:
+            db_method = f"take_{name_table}()"
             try:
                 data = eval("DB." + db_method)
                 return data
@@ -203,11 +159,10 @@ class DropMenu(MDDropdownMenu):
         else:
             self.items = [{"text": "Add in base",
                            "viewclass": "OneLineListItem",
-                           "on_release": lambda: text_list.dropmenu_add_data_in_db_and_close()}]
+                           "on_release": lambda: text_list._dropmenu_add_data_in_db_and_close()}]
 
 
 class Content(RecycleView):
-
     def __init__(self, **kwargs):
         super(Content, self).__init__(**kwargs)
 
@@ -227,64 +182,132 @@ class Content(RecycleView):
 
 
 class AddDataContent(Content):
-    def __init__(self, mode, **kwargs):
+    def __init__(self, type_, **kwargs):
         super(AddDataContent, self).__init__(**kwargs)
 
-        self._set_items(mode)
+        self.data_table = type_
+
+        self._set_items()
 
         self._add_item_in_boxlayout()
 
         self.height = self._get_height()
         self.ids.box.height = self._get_box_height()
 
-    def _set_items(self, mode: str):
-        """Устанавливает items в зависимости от mode."""
-        if mode == "match":
+    def _set_items(self):
+        """Устанавливает items в зависимости от названия таблицы БД, которая будт обновляться."""
+        if self.data_table == "game":
             self.items = [
-                "Stadium drop notnull", "Date and time notnull", "League drop notnull", "Home team drop notnull",
-                "Guest team drop notnull", "Chief referee drop notnull", "First referee drop",
-                "Second referee drop", "Reserve referee drop"
+                {'name': 'Stadium', 'type': 'textfield',
+                 'data_table': 'stadium', 'data_key': 'stadium_id', 'drop_menu': True, 'notnull': True},
+                {'name': 'Data and Time', 'type': 'textfield',
+                 'data_table': None, 'data_key': 'date_and_time', 'drop_menu': False, 'notnull': True},
+                {'name': 'League', 'type': 'textfield',
+                 'data_table': 'league', 'data_key': 'league_id', 'drop_menu': True, 'notnull': True},
+                {'name': 'Home team', 'type': 'textfield',
+                 'data_table': 'team', 'data_key': 'team_home', 'drop_menu': True, 'notnull': True},
+                {'name': 'Guest team', 'type': 'textfield',
+                 'data_table': 'team', 'data_key': 'team_guest', 'drop_menu': True, 'notnull': True},
+                {'name': 'Chief referee', 'type': 'textfield',
+                 'data_table': 'referee', 'data_key': 'referee_chief', 'drop_menu': True, 'notnull': True},
+                {'name': 'First referee', 'type': 'textfield',
+                 'data_table': 'referee', 'data_key': 'referee_first', 'drop_menu': True, 'notnull': False},
+                {'name': 'Second referee', 'type': 'textfield',
+                 'data_table': 'referee', 'data_key': 'referee_second', 'drop_menu': True, 'notnull': False},
+                {'name': 'Reserve referee', 'type': 'textfield',
+                 'data_table': 'referee', 'data_key': 'referee_reserve', 'drop_menu': True, 'notnull': False}
             ]
-        elif mode == "stadium":
-            self.items = ["Name notnull", "City drop notnull", "Address notnull"]
+        elif self.data_table == "stadium":
+            self.items = [
+                {'name': 'Name', 'type': 'textfield',
+                 'data_table': None, 'data_key': 'name', 'drop_menu': False, 'notnull': True},
+                {'name': 'City', 'type': 'textfield',
+                 'data_table': 'city', 'data_key': 'city_id', 'drop_menu': True, 'notnull': True},
+                {'name': 'Address', 'type': 'textfield',
+                 'data_table': None, 'data_key': 'address', 'drop_menu': False, 'notnull': True},
+            ]
 
-        elif mode == "referee":
-            self.items = ["First name notnull", "Second name notnull", "Third name", "Phone", "Category drop notnull"]
+        elif self.data_table == "referee":
+            self.items = [
+                {'name': 'Fist name', 'type': 'textfield',
+                 'data_table': None, 'data_key': 'first_name', 'drop_menu': False, 'notnull': True},
+                {'name': 'Second name', 'type': 'textfield',
+                 'data_table': None, 'data_key': 'second_name', 'drop_menu': False,'notnull': True},
+                {'name': 'Third name', 'type': 'textfield',
+                 'data_table': None, 'data_key': 'third_name', 'drop_menu': False, 'notnull': False},
+                {'name': 'Phone', 'type': 'textfield',
+                 'data_table': None, 'data_key': 'phone', 'drop_menu': False, 'notnull': True},
+                {'name': 'Category', 'type': 'textfield',
+                 'data_table': 'category', 'data_key': 'category_id', 'drop_menu': True,'notnull': True}
+            ]
 
-        elif mode in ["league", "team", "category", "city"]:
-            self.items = ["Name notnull"]
+        elif self.data_table in ["league", "team", "category", "city"]:
+            self.items = [{'name': 'Name', 'type': 'textfield',
+                           'data_table': None, 'data_key': 'name', 'drop_menu': False, 'notnull': True}]
 
         else:
-            raise AttributeError(f"Для добавления {mode} не известны названия полей")
+            raise AttributeError(f"Для добавления {self.data_table} не известны названия полей")
 
     def _add_item_in_boxlayout(self):
         """Добавляет items в BoxLayout."""
-        for name in self.items:
-            if "Date and time" in name:
-                self.ids.box.add_widget(DateAndTimeTF(name))
-            elif is_drop_text_field(name):
-                self.ids.box.add_widget(TFWithDrop(name))
+        for item in self.items:
+            if item['name'] == 'Data and Time':
+                self.ids.box.add_widget(DateAndTimeTF(item))
+            elif item['name'] == 'Phone':
+                self.ids.box.add_widget(PhoneTF(item))
+            elif item['drop_menu']:
+                self.ids.box.add_widget(TFWithDrop(item))
             else:
-                self.ids.box.add_widget(TFWithoutDrop(name))
+                self.ids.box.add_widget(TFWithoutDrop(item))
+
+    def update_db(self):
+        """Обрабатывает полученные из полей данные и отправляет на обновление БД."""
+        fields = self.ids.box.children
+
+        data = {}
+        for field in fields:
+
+            if field.is_notnull and not field.text:  # необходимые поля не заполнены
+                open_dialog(f'The "{field.name}" field is not filled on')
+                return
+
+            elif field.set_id:
+                # поле, имеющее всплывающее окно записываются в БД через id
+                if field.data_table == 'referee':
+                    # в таблице referee нет отдельного поля "name", как в других таблицах, поэтому делаем отдельный
+                    # запрос с именем и фамилией
+                    name = field.text.split(' ')
+                    if name[0]:  # введено ли значение в поле
+                        second_name, first_name = name[:2]
+                        data[field.data_key] = DB.take_id_from_referee(field.data_table, first_name, second_name)[0]
+                else:
+                    data[field.data_key] = DB.take_id(field.data_table, field.text)[0]
+
+            else:  # поля не пустые, текст из которых прямо идет в БД
+                data[field.data_key] = field.text
+
+        DB.insert(self.data_table, data)
+
+        open_dialog("Successfully added")
+        self.parent.parent.parent.dismiss()
 
 
 class TextField(MDTextField):
-    def __init__(self, name, **kwargs):
+    def __init__(self, instr, **kwargs):
         super(TextField, self).__init__(**kwargs)
 
         # функция on_focus() объекта TextInput срабатывает при фокусе на объект и разфокусе
         # данный check помогает вызывать необходимые функции только при фокусе на объект
         self.check_text_focus = False
 
-        self.id = False
+        self.name = instr['name']
+        self.data_key = instr['data_key']
+        self.data_table = instr['data_table']
+        self.is_notnull = instr['notnull']
 
-        self.is_notnull = is_notnull_text_field(name)
+        self.set_id = False
 
-        # убираем "drop" и "notnull", если есть
-        name = re.sub('( drop)|( notnull)', '', name)
-        self.about = name
-
-        self.hint_text = "! " + name if self.is_notnull else name
+        self.hint_text = "! " + self.name if self.is_notnull else self.name
 
     def check_focus(self):
         if not self.check_text_focus:
@@ -310,6 +333,45 @@ class TFWithoutDrop(TextField):
         self.check_text_focus = True
 
 
+class PhoneTF(TFWithoutDrop):
+    def __init__(self, name, **kwargs):
+        super(PhoneTF, self).__init__(name, **kwargs)
+
+        self.helper_text = "X(XXX)XXX-XX-XX"
+        self.helper_text_mode = "persistent"
+
+    def insert_text(self, substring, from_undo=False):
+        """Фильтрует ввод текста под формат номера телефона."""
+        cursor = self.cursor_col
+
+        substring = re.sub('[^0-9\+]', '', substring)
+
+        if substring == "+":
+            cursor = self.cursor_col - 1
+        elif self.text.startswith("+"):
+            cursor -=1
+
+        if cursor == 0:
+            substring += "("
+        elif cursor == 4:
+            substring += ")"
+        elif cursor == 8 or cursor == 11:
+            substring += "-"
+        elif cursor > 14:
+            substring = ''
+        return super(PhoneTF, self).insert_text(substring, from_undo=from_undo)
+
+    def on_text_validate(self):
+        # функция on_focus() объекта TextInput срабатывает при фокусе на объект и разфокусе
+        # данный check помогает вызывать необходимые функции только при фокусе на объект
+        self.check_text_focus = True
+
+        pat = "^(\+7|8)\([0-9]{3}\)[0-9]{3}(-[0-9]{2}){2}$"
+
+        if not re.match(pat, self.text):
+            self.text = "incorrect phone"
+
+
 class DateAndTimeTF(TFWithoutDrop):
     def __init__(self, name, **kwargs):
         super(DateAndTimeTF, self).__init__(name, **kwargs)
@@ -319,7 +381,7 @@ class DateAndTimeTF(TFWithoutDrop):
 
     def insert_text(self, substring, from_undo=False):
         cursor = self.cursor_col
-
+        substring = re.sub('[^0-9]', '', substring)
         if cursor in [1, 4]:
             substring += "."
         elif cursor == 9:
@@ -342,10 +404,10 @@ class DateAndTimeTF(TFWithoutDrop):
 
 
 class TFWithDrop(TextField):
-    def __init__(self, name, **kwargs):
-        super(TFWithDrop, self).__init__(name, **kwargs)
+    def __init__(self, instr, **kwargs):
+        super(TFWithDrop, self).__init__(instr, **kwargs)
 
-        self.id = True
+        self.set_id = True
 
         self.drop_menu = DropMenu()
 
@@ -354,15 +416,14 @@ class TFWithDrop(TextField):
         self.drop_menu.dismiss()
 
     def on_focus_(self):
-        """Открытие всплывающего меню"""
+        """Открытие всплывающего меню."""
         self.text = ""
 
         # устанавливаем для всплывающего меню поле ввода, откуда его вызывали
         self.drop_menu.caller = self
 
         # берем текст вызывающего поля ввода для определения строк в всплывающем меню
-        type_data = self._take_type_data(self.drop_menu.caller.about)
-        items = self.drop_menu.take_data(type_data)
+        items = self.drop_menu.take_data(self.data_table)
         self.drop_menu.set_items(self, [i[0] for i in items])
 
         if items:
@@ -370,26 +431,26 @@ class TFWithDrop(TextField):
         self.check_text_focus = True
 
     def do_backspace(self, from_undo=False, mode='bkspc'):
-        """Обновление всплывающего меню при удалении текста"""
+        """Обновляет всплывающее меню при удалении текста."""
         if self.check_text_focus:
             self.update_dropmenu()
         super(TFWithDrop, self).do_backspace(from_undo=from_undo, mode=mode)
 
     def insert_text(self, substring, from_undo=False):
-        """Обновление всплывающего меню при вводе текста"""
+        """Обновляет всплывающее меню при вводе текста."""
         if self.check_text_focus:
             self.update_dropmenu()
 
             super(TFWithDrop, self).insert_text(substring, from_undo=from_undo)
 
     def update_dropmenu(self):
+        """Устанавливает items всплывающего меню, которые подходят по набранному тексту."""
         self.drop_menu.dismiss()
 
         matching_items = []
 
         # берем текст вызывающего поля ввода для определения строк в всплывающем меню
-        type_data = self._take_type_data(self.drop_menu.caller.about)
-        items = self.drop_menu.take_data(type_data)
+        items = self.drop_menu.take_data(self.data_table)
 
         for item in items:
             if self.text.lower() in item[0].lower():
@@ -399,74 +460,43 @@ class TFWithDrop(TextField):
         self.drop_menu.open()
 
     def on_text_validate(self):
+        """При нажатии кнопки Enter вводит текст выбранного item в строку или открывает меню добавления, если item'ов
+        нет. """
         # виджет вызывает on_focus() несколько раз,
         # чтобы всплывающее меню не появлялось снова
         self.check_text_focus = True
 
         text = self.drop_menu.items[0]["text"]
         if text.split()[0] == "Add":
-            self.dropmenu_add_data_in_db()
+            self._dropmenu_add_data_in_db()
         else:
             self.text = text
 
         self.drop_menu.dismiss()
 
-    def dropmenu_add_data_in_db_and_close(self):
-        self.dropmenu_add_data_in_db()
+    def _dropmenu_add_data_in_db_and_close(self):
+        self._dropmenu_add_data_in_db()
         self.drop_menu.dismiss()
 
-    def dropmenu_add_data_in_db(self):
-        mode = self._take_type_data(self.about)
+    def _dropmenu_add_data_in_db(self):
+        """Создает Dialog для добавления новых данных в БД."""
+        title = "Add " + self.name.lower()
 
-        title = "Add " + self.about.lower()
-
-        self.add_data_dialog = Dialog(
+        self.add_data_dialog = MDDialog(
             title=title,
             type="custom",
-            content_cls=AddDataContent(mode),
-            buttons=[MDFlatButton(text="CANCEL", on_release=self.dropmenu_dismiss),
-                     MDFlatButton(text="ADD", on_release=self.dropmenu_add_press)]
+            content_cls=AddDataContent(self.data_table),
+            buttons=[MDFlatButton(text="CANCEL", on_release=self._dropmenu_dismiss),
+                     MDFlatButton(text="ADD", on_release=self._update_match_db)]
         )
         self.add_data_dialog.open()
 
-    def dropmenu_add_press(self, event):
-        db_table = self.add_data_dialog.title.split()[-1]
-        data = self.collect_data()
+    def _update_match_db(self, event):
+        """Вызывается при нажатии кнопки ADD"""
+        self.add_data_dialog.content_cls.update_db()
 
-        add_data_in_db(table=db_table, data=data)
-
+    def _dropmenu_dismiss(self, event):
         self.add_data_dialog.dismiss()
-
-    def collect_data(self):
-        text_fields = self.add_data_dialog.content_cls.ids.box.children
-        data = {}
-        for tf in text_fields:
-            if tf.id:  # необходимо добавить в базу данных id, а не text
-                value = take_id_from_name(tf.about.lower(), tf.text)
-                data[tf.about] = value[0]
-            else:
-                data[tf.about] = tf.text
-
-        return data
-
-    def dropmenu_dismiss(self, event):
-        self.add_data_dialog.dismiss()
-
-    @staticmethod
-    def _take_type_data(about: str):
-        about_list = about.lower().split()
-
-        if about_list[0] == "date":
-            return None
-
-        if len(about_list) == 2:
-            return about_list[1]
-
-        elif len(about_list) == 1:
-            return about_list[0]
-
-        else:
-            return None
 
 
 class MainApp(MDApp):
