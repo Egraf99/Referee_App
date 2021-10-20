@@ -65,7 +65,6 @@ class ConnDB:
         return self.select_request(sql, one=True)
 
     def insert(self, table, data: dict):
-        print(table, data)
         # убираем пустые значения и заменяем пробелы на нижние подчеркивания
         data = {k: v for k, v in data.items() if v}
 

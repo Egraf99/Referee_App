@@ -296,10 +296,6 @@ class TextField(MDTextField):
     def __init__(self, instr, **kwargs):
         super(TextField, self).__init__(**kwargs)
 
-        # функция on_focus() объекта TextInput срабатывает при фокусе на объект и разфокусе
-        # данный check помогает вызывать необходимые функции только при фокусе на объект
-        self.check_text_focus = False
-
         self.name = instr['name']
         self.data_key = instr['data_key']
         self.data_table = instr['data_table']
@@ -308,13 +304,6 @@ class TextField(MDTextField):
         self.set_id = False
 
         self.hint_text = "! " + self.name if self.is_notnull else self.name
-
-    def check_focus(self):
-        if not self.check_text_focus:
-            self.on_focus_()
-
-        else:
-            self.check_text_focus = False
 
     def on_focus_(self):
         self.text = ""
@@ -326,11 +315,6 @@ class TextField(MDTextField):
 class TFWithoutDrop(TextField):
     def __init__(self, name, **kwargs):
         super(TFWithoutDrop, self).__init__(name, **kwargs)
-
-    def on_text_validate(self):
-        # функция on_focus() объекта TextInput срабатывает при фокусе на объект и разфокусе
-        # данный check помогает вызывать необходимые функции только при фокусе на объект
-        self.check_text_focus = True
 
 
 class PhoneTF(TFWithoutDrop):
@@ -362,10 +346,6 @@ class PhoneTF(TFWithoutDrop):
         return super(PhoneTF, self).insert_text(substring, from_undo=from_undo)
 
     def on_text_validate(self):
-        # функция on_focus() объекта TextInput срабатывает при фокусе на объект и разфокусе
-        # данный check помогает вызывать необходимые функции только при фокусе на объект
-        self.check_text_focus = True
-
         pat = "^(\+7|8)\([0-9]{3}\)[0-9]{3}(-[0-9]{2}){2}$"
 
         if not re.match(pat, self.text):
@@ -393,10 +373,6 @@ class DateAndTimeTF(TFWithoutDrop):
         return super(DateAndTimeTF, self).insert_text(substring, from_undo=from_undo)
 
     def on_text_validate(self):
-        # функция on_focus() объекта TextInput срабатывает при фокусе на объект и разфокусе
-        # данный check помогает вызывать необходимые функции только при фокусе на объект
-        self.check_text_focus = True
-
         pat = "^(0?[1-9]|[12][0-9]|3[01]).(0?[0-9]|1[012]).(19|20)?[0-9]{2} ([01][1-9]|2[0-4]):[0-6][0-9]$"
 
         if not re.match(pat, self.text):
@@ -428,20 +404,17 @@ class TFWithDrop(TextField):
 
         if items:
             self.drop_menu.open()
-        self.check_text_focus = True
 
     def do_backspace(self, from_undo=False, mode='bkspc'):
         """Обновляет всплывающее меню при удалении текста."""
-        if self.check_text_focus:
-            self.update_dropmenu()
+        self.update_dropmenu()
         super(TFWithDrop, self).do_backspace(from_undo=from_undo, mode=mode)
 
     def insert_text(self, substring, from_undo=False):
         """Обновляет всплывающее меню при вводе текста."""
-        if self.check_text_focus:
-            self.update_dropmenu()
+        self.update_dropmenu()
 
-            super(TFWithDrop, self).insert_text(substring, from_undo=from_undo)
+        super(TFWithDrop, self).insert_text(substring, from_undo=from_undo)
 
     def update_dropmenu(self):
         """Устанавливает items всплывающего меню, которые подходят по набранному тексту."""
@@ -462,10 +435,6 @@ class TFWithDrop(TextField):
     def on_text_validate(self):
         """При нажатии кнопки Enter вводит текст выбранного item в строку или открывает меню добавления, если item'ов
         нет. """
-        # виджет вызывает on_focus() несколько раз,
-        # чтобы всплывающее меню не появлялось снова
-        self.check_text_focus = True
-
         text = self.drop_menu.items[0]["text"]
         if text.split()[0] == "Add":
             self._dropmenu_add_data_in_db()

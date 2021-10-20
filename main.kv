@@ -52,14 +52,14 @@
                     halign: 'center'
 
 <TextField>:
-    on_focus: root.check_focus()
+    on_focus: if self.focus: root.on_focus_()
     on_cursor: root.on_cursor_()
 
 
 <Content>:
     size_hint_y: None
 
-    BoxLayout:
+    MDBoxLayout:
         id: box
         orientation: "vertical"
-        size_hint_y: None
+        adaptive_height: True
