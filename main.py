@@ -232,13 +232,13 @@ class AddDataContent(Content):
                 {'name': 'Fist name', 'type': 'textfield',
                  'data_table': None, 'data_key': 'first_name', 'drop_menu': False, 'notnull': True},
                 {'name': 'Second name', 'type': 'textfield',
-                 'data_table': None, 'data_key': 'second_name', 'drop_menu': False,'notnull': True},
+                 'data_table': None, 'data_key': 'second_name', 'drop_menu': False, 'notnull': True},
                 {'name': 'Third name', 'type': 'textfield',
                  'data_table': None, 'data_key': 'third_name', 'drop_menu': False, 'notnull': False},
                 {'name': 'Phone', 'type': 'textfield',
                  'data_table': None, 'data_key': 'phone', 'drop_menu': False, 'notnull': True},
                 {'name': 'Category', 'type': 'textfield',
-                 'data_table': 'category', 'data_key': 'category_id', 'drop_menu': True,'notnull': True}
+                 'data_table': 'category', 'data_key': 'category_id', 'drop_menu': True, 'notnull': True}
             ]
 
         elif self.data_table in ["league", "team", "category", "city"]:
@@ -291,6 +291,15 @@ class AddDataContent(Content):
         open_dialog("Successfully added")
         self.parent.parent.parent.dismiss()
 
+    def set_next_focus(self, previous_widget):
+        widgets = self.ids.box.children
+
+        for inx, widget in enumerate(widgets):
+            if widget is previous_widget:
+                #  в списке Widget.parent последние добавленные виджеты лежат в начале,
+                # поэтому отнимаем индекс
+                widgets[inx - 1].focus = True
+
 
 class TextField(MDTextField):
     def __init__(self, instr, **kwargs):
@@ -310,6 +319,13 @@ class TextField(MDTextField):
 
     def on_cursor_(self):
         pass
+
+    def on_text_validate(self):
+        self.set_next_focus()
+        super(TextField, self).on_text_validate()
+
+    def set_next_focus(self):
+        self.parent.parent.set_next_focus(self)
 
 
 class TFWithoutDrop(TextField):
@@ -333,7 +349,7 @@ class PhoneTF(TFWithoutDrop):
         if substring == "+":
             cursor = self.cursor_col - 1
         elif self.text.startswith("+"):
-            cursor -=1
+            cursor -= 1
 
         if cursor == 0:
             substring += "("
@@ -350,6 +366,8 @@ class PhoneTF(TFWithoutDrop):
 
         if not re.match(pat, self.text):
             self.text = "incorrect phone"
+
+        super(PhoneTF, self).on_text_validate()
 
 
 class DateAndTimeTF(TFWithoutDrop):
