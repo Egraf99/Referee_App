@@ -4,22 +4,13 @@ import sqlite3
 class ConnDB:
     def take_games(self):
         sql = '''SELECT league.name, year||' '||month||' '||day AS date,
-                        time, stadium.name, th.name, tg.name,
-                        rc.first_name||' '||rc.second_name AS referee_chief,
-                        rf.first_name||' '||rf.second_name AS referee_first,
-                        rs.first_name||' '||rs.second_name AS referee_second,
-                        rr.first_name||' '||rr.second_name AS referee_reserve,
-                        game_passed, payment, pay_done
+                        time, stadium.name, th.name, tg.name
                    FROM Games 
                         INNER JOIN League ON Games.league_id = League.id
                         INNER JOIN Stadium ON Games.stadium_id = Stadium.id
                         INNER JOIN Team AS th ON Games.team_home = th.id
                         INNER JOIN Team AS tg ON Games.team_guest = tg.id
-                        INNER JOIN Referee AS rc ON Games.referee_chief = rc.id
-                        INNER JOIN Referee AS rf ON Games.referee_first = rf.id
-                        INNER JOIN Referee AS rs ON Games.referee_second = rs.id
-                        INNER JOIN Referee AS rr ON Games.referee_reserve = rr.id
-                  ORDER BY date ASC'''
+                  ORDER BY day, month, year ASC, time DESC'''
 
         return self.select_request(sql)
 
@@ -56,12 +47,16 @@ class ConnDB:
 
         return self.select_request(sql)
 
-    def take_id(self, table, name):
-        sql = f'''SELECT id FROM {table} WHERE name = "{name}"'''
-        return self.select_request(sql, one=True)
+    def take_id(self, table, name_dict):
+        name_list = []
+        for name in name_dict:
+            name_list.append(f'{name} = "{name_dict[name]}"')
 
-    def take_id_from_referee(self, table, first_name, second_name):
-        sql = f'''SELECT id FROM {table} WHERE first_name = "{first_name}" AND second_name = "{second_name}"'''
+        conditions = " AND ".join(name_list)
+        sql = f'''SELECT id FROM {table} WHERE {conditions}'''
+
+        # print(sql)
+
         return self.select_request(sql, one=True)
 
     def insert(self, table, data: dict):
@@ -75,7 +70,7 @@ class ConnDB:
 
         print(sql, values)
 
-        # self.insert_request(sql, values)
+        self.insert_request(sql, values)
 
     @staticmethod
     def _convert_special_date(data):
