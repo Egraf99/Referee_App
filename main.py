@@ -1,4 +1,6 @@
 import re
+import time
+import asyncio
 from abc import ABC
 
 from kivy.uix.boxlayout import BoxLayout
@@ -22,7 +24,10 @@ from datebase import ConnDB
 
 
 def open_dialog(text):
-    MDDialog(text=text).open()
+    dialog = MDDialog(text=text)
+    dialog.open()
+
+    # dialog.dismiss()
 
 
 class GameScreen(BoxLayout):
@@ -63,37 +68,40 @@ class GameScreen(BoxLayout):
 
 
 class AddDataWindow(MDDialog):
-    def __init__(self, type_, filled=None, **kwargs):
+    def __init__(self, type_, filled=None, caller=None, **kwargs):
         title = " ".join(['Add', type_])
+        self.caller_ = caller
 
         self.auto_dismiss = False
         self.title = title
         self.type = "custom"
         self._set_content_cls(type_, filled)
         self.buttons = [MDFlatButton(text="CANCEL", on_release=self._dropmenu_dismiss),
-                        MDFlatButton(text="ADD", on_release=self._update_db)]
+                        MDFlatButton(text="ADD", on_release=self._add_button_click)]
 
         super(AddDataWindow, self).__init__(**kwargs)
 
     def _set_content_cls(self, type_, filled):
         if type_ == "game":
-            self.content_cls = AddGameContent(filled)
+            self.content_cls = AddGameContent(filled, caller=self.caller_)
         if type_ == "referee":
-            self.content_cls = AddRefereeContent(filled)
+            self.content_cls = AddRefereeContent(filled, caller=self.caller_)
         if type_ == "stadium":
-            self.content_cls = AddStadiumContent(filled)
+            self.content_cls = AddStadiumContent(filled, caller=self.caller_)
         if type_ == "league":
-            self.content_cls = AddLeagueContent(filled)
+            self.content_cls = AddLeagueContent(filled, caller=self.caller_)
         if type_ == "category":
-            self.content_cls = AddCategoryContent(filled)
+            self.content_cls = AddCategoryContent(filled, caller=self.caller_)
         if type_ == "city":
-            self.content_cls = AddCityContent(filled)
+            self.content_cls = AddCityContent(filled, caller=self.caller_)
         if type_ == "team":
-            self.content_cls = AddTeamContent(filled)
+            self.content_cls = AddTeamContent(filled, caller=self.caller_)
 
-    def _update_db(self, event):
+    def _add_button_click(self, event):
         """Вызывается при нажатии кнопки ADD"""
-        self.content_cls.update_db()
+        success = self.content_cls.update_db()
+        if success and self.caller_:
+            self.caller_.parent.parent.set_focus()
 
     def _dropmenu_dismiss(self, event):
         self.dismiss()
@@ -191,16 +199,26 @@ class DropMenu(MDDropdownMenu):
         else:
             self.items = [{"text": "Add in base",
                            "viewclass": "OneLineListItem",
-                           "on_release": lambda: text_list._dropmenu_add_data_in_db_and_close()}]
+                           "on_release": lambda: text_list._dropmenu_add_data_and_close()}]
 
 
-class Content(RecycleView):
-    def __init__(self, **kwargs):
-        super(Content, self).__init__(**kwargs)
+class AddDataContent(RecycleView):
+    def __init__(self, filled, caller, **kwargs):
+        super(AddDataContent, self).__init__(**kwargs)
+        self.caller_ = caller
+        self._add_item_in_boxlayout(filled)
+
+        self.set_focus()
+
+    def set_focus(self):
+        for field in self.ids.box.children[::-1]:
+            if not field.text:
+                field.focus = True
+                break
 
     def _get_height(self):
         """Устанавливает высоту Content в зависимости от количества items."""
-        height = len(self.items) * 50
+        height = len(self.items) * 55
 
         if height > 300:
             height = 300
@@ -209,32 +227,22 @@ class Content(RecycleView):
 
     def _get_box_height(self):
         """Устанавливает высоту BoxLayout в зависимости от количества items."""
-        height = len(self.items) * 53
+        height = len(self.items) * 53.5
         return dp(height)
-
-
-class AddDataContent(Content):
-    def __init__(self, filled, **kwargs):
-        super(AddDataContent, self).__init__(**kwargs)
-        self._add_item_in_boxlayout(filled)
-
-        self.height = self._get_height()
-        self.ids.box.height = self._get_box_height()
 
     def _add_item_in_boxlayout(self, filled):
         """Добавляет items в BoxLayout."""
         for item in self.items:
             text = ''
 
-            if filled:
-                key, value = filled.popitem()
-                text = value if item["name"].lower() == key else ''
+            if filled:  # заполняет уже имеющиеся данные в строке
+                text = filled.pop(item['data_key'], '')
 
             if item['name'] == 'Data and Time':
                 self.ids.box.add_widget(DateAndTimeTF(item, text=text))
             elif item['name'] == 'Phone':
                 self.ids.box.add_widget(PhoneTF(item, text=text))
-            elif item['drop_menu']:
+            elif item.setdefault('drop_menu', False):
                 self.ids.box.add_widget(TFWithDrop(item, text=text))
             else:
                 self.ids.box.add_widget(TFWithoutDrop(item, text=text))
@@ -243,15 +251,19 @@ class AddDataContent(Content):
         """Обрабатывает полученные из полей данные и отправляет на обновление БД."""
         fields = self.ids.box.children
 
+        not_fill_fields = []
+        caller_field_text = ""
         data = {}
+
         for field in fields:
+            if field.add_text_in_parent:
+                # запоминаем текст из полей, данные из которых будут записаны в вызывающем поле
+                caller_field_text += field.text
 
-            if field.is_notnull and not field.text:  # необходимые поля не заполнены
-                open_dialog(f'The "{field.name}" field is not filled on')
-                return
+            if field.is_notnull and not field.text:  # ищем необходимые не заполненные поля
+                not_fill_fields.append(field.name.capitalize())
 
-            elif field.set_id:
-                # поле, имеющее всплывающее окно записываются в БД через id
+            elif field.text and field.set_id:  # поле, имеющее всплывающее окно записываются в БД через id
                 if field.data_table == 'referee':
                     # в таблице referee нет отдельного поля "name", как в других таблицах, поэтому делаем отдельный
                     # запрос с именем и фамилией
@@ -260,15 +272,31 @@ class AddDataContent(Content):
                         second_name, first_name = name[:2]
                         data[field.data_key] = DB.take_id_from_referee(field.data_table, first_name, second_name)[0]
                 else:
-                    data[field.data_key] = DB.take_id(field.data_table, field.text)[0]
+                    id_ = DB.take_id(field.data_table, field.text)[0]
+                    if id_:
+                        data[field.data_key] = DB.take_id(field.data_table, field.text)[0]
+                    else:
+                        print(f'Для имени {field.text} нет id')
 
-            else:  # поля не пустые, текст из которых прямо идет в БД
+            elif field.text:  # поля не пустые, текст из которых прямо идет в БД
                 data[field.data_key] = field.text
+
+        if not_fill_fields:
+            not_filled = ", ".join(not_fill_fields)
+            open_dialog(f'The {not_filled} field/s is not filled on')
+            return False
+
+        if self.caller_:
+            self.caller_.text = caller_field_text
 
         DB.insert(self.data_table, data)
 
-        open_dialog("Successfully added")
+        # self.parent - BoxLayout, self.parent.parent - MDCard, self.parent.parent.parent - AddDataWindow
         self.parent.parent.parent.dismiss()
+
+        open_dialog("Successfully added")
+
+        return True
 
     def set_next_focus(self, previous_widget):
         """Устанавливает фокус на слудующем виджете, если он не заполнен."""
@@ -283,114 +311,115 @@ class AddDataContent(Content):
 
 
 class AddGameContent(AddDataContent):
-    def __init__(self, filled, **kwargs):
+    def __init__(self, filled, caller=None, **kwargs):
         self.data_table = "game"
         self.items = [
-            {'name': 'Stadium', 'type': 'textfield', 'fill_in': 'name',
+            {'name': 'Stadium', 'type': 'textfield', 'what_field_child_fill': ['name'],
              'data_table': 'stadium', 'data_key': 'stadium_id', 'drop_menu': True, 'notnull': True},
-            {'name': 'Data and Time', 'type': 'textfield', 'fill_in': None,
-             'data_table': None, 'data_key': 'date_and_time', 'drop_menu': False, 'notnull': True},
-            {'name': 'League', 'type': 'textfield', 'fill_in': 'name',
+            {'name': 'Data and Time', 'type': 'textfield', 'data_key': 'date_and_time', 'notnull': True},
+            {'name': 'League', 'type': 'textfield', 'what_field_child_fill': ['name'],
              'data_table': 'league', 'data_key': 'league_id', 'drop_menu': True, 'notnull': True},
-            {'name': 'Home team', 'type': 'textfield', 'fill_in': 'name',
+            {'name': 'Home team', 'type': 'textfield', 'what_field_child_fill': ['name'],
              'data_table': 'team', 'data_key': 'team_home', 'drop_menu': True, 'notnull': True},
-            {'name': 'Guest team', 'type': 'textfield', 'fill_in': 'name',
+            {'name': 'Guest team', 'type': 'textfield', 'what_field_child_fill': ['name'],
              'data_table': 'team', 'data_key': 'team_guest', 'drop_menu': True, 'notnull': True},
-            {'name': 'Chief referee', 'type': 'textfield', 'fill_in': 'second_name',
+            {'name': 'Chief referee', 'type': 'textfield',
+             'what_field_child_fill': ['second_name', 'first_name', 'third_name'],
              'data_table': 'referee', 'data_key': 'referee_chief', 'drop_menu': True, 'notnull': True},
-            {'name': 'First referee', 'type': 'textfield', 'fill_in': 'second_name',
-             'data_table': 'referee', 'data_key': 'referee_first', 'drop_menu': True, 'notnull': False},
-            {'name': 'Second referee', 'type': 'textfield', 'fill_in': 'second_name',
-             'data_table': 'referee', 'data_key': 'referee_second', 'drop_menu': True, 'notnull': False},
-            {'name': 'Reserve referee', 'type': 'textfield', 'fill_in': 'second_name',
-             'data_table': 'referee', 'data_key': 'referee_reserve', 'drop_menu': True, 'notnull': False}
+            {'name': 'First referee', 'type': 'textfield',
+             'what_field_child_fill': ['second_name', 'first_name', 'third_name'],
+             'data_table': 'referee', 'data_key': 'referee_first', 'drop_menu': True},
+            {'name': 'Second referee', 'type': 'textfield',
+             'what_field_child_fill': ['second_name', 'first_name', 'third_name'],
+             'data_table': 'referee', 'data_key': 'referee_second', 'drop_menu': True},
+            {'name': 'Reserve referee', 'type': 'textfield',
+             'what_field_child_fill': ['second_name', 'first_name', 'third_name'],
+             'data_table': 'referee', 'data_key': 'referee_reserve', 'drop_menu': True}
         ]
 
-        super(AddGameContent, self).__init__(filled, **kwargs)
+        super(AddGameContent, self).__init__(filled, caller, **kwargs)
 
 
 class AddRefereeContent(AddDataContent):
-    def __init__(self, filled, **kwargs):
+    def __init__(self, filled, caller=None, **kwargs):
         self.data_table = "referee"
         self.items = [
-            {'name': 'Fist name', 'type': 'textfield', 'fill_in': None,
-             'data_table': None, 'data_key': 'first_name', 'drop_menu': False, 'notnull': True},
-            {'name': 'Second name', 'type': 'textfield', 'fill_in': None,
-             'data_table': None, 'data_key': 'second_name', 'drop_menu': False, 'notnull': True},
-            {'name': 'Third name', 'type': 'textfield', 'fill_in': None,
-             'data_table': None, 'data_key': 'third_name', 'drop_menu': False, 'notnull': False},
-            {'name': 'Phone', 'type': 'textfield', 'fill_in': None,
-             'data_table': None, 'data_key': 'phone', 'drop_menu': False, 'notnull': True},
-            {'name': 'Category', 'type': 'textfield', 'fill_in': 'name',
-             'data_table': 'category', 'data_key': 'category_id', 'drop_menu': True, 'notnull': True}
+            {'name': 'Second name', 'type': 'textfield', 'data_key': 'second_name', 'notnull': True,
+             'add_text_in_parent': True},
+            {'name': 'Fist name', 'type': 'textfield', 'data_key': 'first_name', 'notnull': True,
+             'add_text_in_parent': True},
+            {'name': 'Third name', 'type': 'textfield', 'data_key': 'third_name'},
+            {'name': 'Phone', 'type': 'textfield', 'data_key': 'phone'},
+            {'name': 'Category', 'type': 'textfield', 'what_field_child_fill': ['name'],
+             'data_table': 'category', 'data_key': 'category_id', 'drop_menu': True}
         ]
 
-        super(AddRefereeContent, self).__init__(filled, **kwargs)
+        super(AddRefereeContent, self).__init__(filled, caller, **kwargs)
 
 
 class AddStadiumContent(AddDataContent):
-    def __init__(self, filled, **kwargs):
+    def __init__(self, filled, caller=None, **kwargs):
         self.data_table = "stadium"
         self.items = [
-            {'name': 'Name', 'type': 'textfield', 'fill_in': None,
-             'data_table': None, 'data_key': 'name', 'drop_menu': False, 'notnull': True},
-            {'name': 'City', 'type': 'textfield', 'fill_in': 'name',
+            {'name': 'Name', 'type': 'textfield', 'data_key': 'name', 'notnull': True, 'add_text_in_parent': True},
+            {'name': 'City', 'type': 'textfield', 'what_field_child_fill': ['name'],
              'data_table': 'city', 'data_key': 'city_id', 'drop_menu': True, 'notnull': True},
-            {'name': 'Address', 'type': 'textfield', 'fill_in': None,
-             'data_table': None, 'data_key': 'address', 'drop_menu': False, 'notnull': True},
+            {'name': 'Address', 'type': 'textfield', 'data_key': 'address', 'notnull': True},
         ]
 
-        super(AddStadiumContent, self).__init__(filled, **kwargs)
+        super(AddStadiumContent, self).__init__(filled, caller, **kwargs)
 
 
 class AddLeagueContent(AddDataContent):
-    def __init__(self, filled, **kwargs):
+    def __init__(self, filled, caller=None, **kwargs):
         self.data_table = "league"
-        self.items = [{'name': 'Name', 'type': 'textfield', 'fill_in': None,
-                       'data_table': None, 'data_key': 'name', 'drop_menu': False, 'notnull': True}]
+        self.items = [
+            {'name': 'Name', 'type': 'textfield', 'data_key': 'name', 'notnull': True, 'add_text_in_parent': True}]
 
-        super(AddLeagueContent, self).__init__(filled, **kwargs)
+        super(AddLeagueContent, self).__init__(filled, caller, **kwargs)
 
 
 class AddTeamContent(AddDataContent):
-    def __init__(self, filled, **kwargs):
+    def __init__(self, filled, caller=None, **kwargs):
         self.data_table = "team"
-        self.items = [{'name': 'Name', 'type': 'textfield', 'fill_in': None,
-                       'data_table': None, 'data_key': 'name', 'drop_menu': False, 'notnull': True}]
+        self.items = [
+            {'name': 'Name', 'type': 'textfield', 'data_key': 'name', 'notnull': True, 'add_text_in_parent': True}]
 
-        super(AddTeamContent, self).__init__(filled, **kwargs)
+        super(AddTeamContent, self).__init__(filled, caller, **kwargs)
 
 
 class AddCategoryContent(AddDataContent):
-    def __init__(self, filled, **kwargs):
+    def __init__(self, filled, caller=None, **kwargs):
         self.data_table = "category"
-        self.items = [{'name': 'Name', 'type': 'textfield', 'fill_in': None,
-                       'data_table': None, 'data_key': 'name', 'drop_menu': False, 'notnull': True}]
+        self.items = [
+            {'name': 'Name', 'type': 'textfield', 'data_key': 'name', 'notnull': True, 'add_text_in_parent': True}]
 
-        super(AddCategoryContent, self).__init__(filled, **kwargs)
+        super(AddCategoryContent, self).__init__(filled, caller, **kwargs)
 
 
 class AddCityContent(AddDataContent):
-    def __init__(self, filled, **kwargs):
+    def __init__(self, filled, caller=None, **kwargs):
         self.data_table = "city"
-        self.items = [{'name': 'Name', 'type': 'textfield', 'fill_in': None,
-                       'data_table': None, 'data_key': 'name', 'drop_menu': False, 'notnull': True}]
+        self.items = [
+            {'name': 'Name', 'type': 'textfield', 'data_key': 'name', 'notnull': True, 'add_text_in_parent': True}]
 
-        super(AddCityContent, self).__init__(filled, **kwargs)
+        super(AddCityContent, self).__init__(filled, caller, **kwargs)
 
 
 class TextField(MDTextField):
-    def __init__(self, instr, text, **kwargs):
+    def __init__(self, instr: dict, text: str, **kwargs):
         super(TextField, self).__init__(**kwargs)
-        self.text = text
+        self.set_text(self, text)
 
-        self.name = instr['name']
-        self.data_key = instr['data_key']
-        self.data_table = instr['data_table']
-        self.is_notnull = instr['notnull']
-        self.fill_in = instr['fill_in']
+        self.name = instr.setdefault('name')
+        self.data_key = instr.setdefault('data_key')
+        self.data_table = instr.setdefault('data_table')
+        self.is_notnull = instr.setdefault('notnull', False)
+        self.what_field_child_fill = instr.setdefault('what_field_child_fill')
+        self.add_text_in_parent = instr.setdefault('add_text_in_parent', False)
 
         self.set_id = False
+        self.change_focus = False
 
         self.hint_text = "! " + self.name if self.is_notnull else self.name
 
@@ -406,12 +435,18 @@ class TextField(MDTextField):
         self.set_next_focus()
 
     def set_next_focus(self):
-        self.parent.parent.set_next_focus(self)
+        if self.change_focus:
+            self.parent.parent.set_next_focus(self)
 
 
 class TFWithoutDrop(TextField):
     def __init__(self, name, text='', **kwargs):
         super(TFWithoutDrop, self).__init__(name, text, **kwargs)
+
+    def on_text_validate(self):
+        super(TextField, self).on_text_validate()
+        self.change_focus = True
+        self.set_next_focus()
 
 
 class PhoneTF(TFWithoutDrop):
@@ -446,6 +481,8 @@ class PhoneTF(TFWithoutDrop):
         pat = "^(\+7|8)\([0-9]{3}\)[0-9]{3}(-[0-9]{2}){2}$"
 
         if not re.match(pat, self.text):
+            # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+            # делаем красным очищаем и не меняем фокус
             self.text = "incorrect phone"
 
         super(PhoneTF, self).on_text_validate()
@@ -475,6 +512,8 @@ class DateAndTimeTF(TFWithoutDrop):
         pat = "^(0?[1-9]|[12][0-9]|3[01]).(0?[0-9]|1[012]).(19|20)?[0-9]{2} ([01][1-9]|2[0-4]):[0-6][0-9]$"
 
         if not re.match(pat, self.text):
+            # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+            # делаем красным очищаем и не меняем фокус
             self.text = "incorrect data or time"
 
         super(DateAndTimeTF, self).on_text_validate()
@@ -536,26 +575,43 @@ class TFWithDrop(TextField):
 
     def on_text_validate(self):
         """При нажатии кнопки Enter вводит текст выбранного item в строку или открывает меню добавления, если item'ов
-        нет. """
-        text = self.drop_menu.items[0]["text"]
-        if text.split()[0] == "Add":
-            filled_field = {self.fill_in: self.text}
-            self.text = ''
+        нет."""
+        text_dropmenu = self.drop_menu.items[0]["text"]
 
-            self._dropmenu_add_data_in_db(filled_field)
+        if text_dropmenu.split()[0] == "Add":
+            filled_fields = self._make_dict_filled_field_in_children()
+            self.text = ''
+            self._dropmenu_add_data(filled_fields)
+
         else:
-            self.text = text
+            self.text = text_dropmenu
+            self.change_focus = True
 
         self.drop_menu.dismiss()
         super(TFWithDrop, self).on_text_validate()
 
-    def _dropmenu_add_data_in_db_and_close(self):
-        self._dropmenu_add_data_in_db()
+    def _make_dict_filled_field_in_children(self) -> dict:
+        filled_fields = {}
+
+        if len(self.what_field_child_fill) == 1:
+            filled_fields.update({self.what_field_child_fill[0]: self.text})
+        elif len(self.what_field_child_fill) > 1:
+            text_fields = self.text.split()
+            for inx, field in enumerate(self.what_field_child_fill):
+                try:
+                    filled_fields.update({field: text_fields[inx]})
+                except IndexError:
+                    continue
+
+        return filled_fields
+
+    def _dropmenu_add_data_and_close(self):
+        self._dropmenu_add_data()
         self.drop_menu.dismiss()
 
-    def _dropmenu_add_data_in_db(self, filled_field):
+    def _dropmenu_add_data(self, filled_fields=None):
         """Создает Dialog для добавления новых данных в БД."""
-        self.add_data_dialog = AddDataWindow(self.data_table, filled=filled_field)
+        self.add_data_dialog = AddDataWindow(self.data_table, filled=filled_fields, caller=self)
         self.add_data_dialog.open()
 
 

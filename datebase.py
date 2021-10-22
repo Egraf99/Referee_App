@@ -65,9 +65,6 @@ class ConnDB:
         return self.select_request(sql, one=True)
 
     def insert(self, table, data: dict):
-        # убираем пустые значения и заменяем пробелы на нижние подчеркивания
-        data = {k: v for k, v in data.items() if v}
-
         self._convert_special_date(data)
 
         column = ','.join(d for d in data.keys())
@@ -80,7 +77,8 @@ class ConnDB:
 
         # self.insert_request(sql, values)
 
-    def _convert_special_date(self, data):
+    @staticmethod
+    def _convert_special_date(data):
         """Преаобразует специальные поля (дата, время, телефон) в формат значений БД."""
         if "date_and_time" in data.keys():
             # year, day, month, time
@@ -122,7 +120,7 @@ class ConnDB:
 
 
 if __name__ == '__main__':
-    print(ConnDB().insert('game',
+    ConnDB().insert('game',
                           {'chief_referee': 'Ходин Егор', 'guest_team': 'Смена-2', 'home_team': 'Смена-2',
                            'league': 'ЛФК А',
-                           'date_and_time': '12.04.2021 15:00', 'stadium': 'Сапсан Арена'}))
+                           'date_and_time': '12.04.2021 15:00', 'stadium': 'Сапсан Арена'})
