@@ -8,6 +8,7 @@ from kivy.properties import ObjectProperty
 from kivy.metrics import dp
 
 from kivymd.uix.boxlayout import MDBoxLayout
+from kivymd.uix.card import MDCard
 from kivymd.uix.datatables import MDDataTable
 from kivymd.uix.dialog import MDDialog
 from kivymd.uix.button import MDFlatButton
@@ -195,6 +196,7 @@ class MenuHeader(MDBoxLayout):
 class DropMenu(MDDropdownMenu):
     def __init__(self, **kwargs):
         self.width_mult = dp(4)
+        self.max_height = dp(250)
         self.box = BoxLayout(orientation="vertical")
 
         super(DropMenu, self).__init__(**kwargs)
@@ -210,6 +212,11 @@ class DropMenu(MDDropdownMenu):
             self.items = [{"text": "Add in base",
                            "viewclass": "OneLineListItem",
                            "on_release": lambda: text_list._drop_menu_add_data_and_close()}]
+
+    def update(self):
+        self.set_menu_properties()
+        if not self.parent:
+            self.open()
 
 
 class AddDataContent(RecycleView):
@@ -585,7 +592,7 @@ class TFWithDrop(TextField):
 
         if items:
             try:
-                Clock.schedule_once(self.open_drop_menu, 2)
+                Clock.schedule_once(self.open_drop_menu, 0.1)
             except WidgetException:
                 # всплывающее окно уже открыто
                 pass
@@ -596,8 +603,8 @@ class TFWithDrop(TextField):
 
     def do_backspace(self, from_undo=False, mode='bkspc'):
         """Обновляет всплывающее меню при удалении текста."""
-        self.update_drop_menu()
         super(TFWithDrop, self).do_backspace(from_undo=from_undo, mode=mode)
+        self.update_drop_menu()
 
     def insert_text(self, substring, from_undo=False):
         """Обновляет всплывающее меню при вводе текста."""
@@ -606,9 +613,7 @@ class TFWithDrop(TextField):
         super(TFWithDrop, self).insert_text(substring, from_undo=from_undo)
 
     def update_drop_menu(self):
-        """Устанавливает items всплывающего меню, которые подходят по набранному тексту."""
-        self.drop_menu.dismiss()
-
+        """Обновление items всплывающего меню, которые подходят по набранному тексту."""
         matching_items = []
 
         # берем текст вызывающего поля ввода для определения строк в всплывающем меню
@@ -619,8 +624,7 @@ class TFWithDrop(TextField):
                 matching_items.append(item)
 
         self.drop_menu.set_items(self, [i[0] for i in matching_items])
-
-        self.drop_menu.open()
+        self.drop_menu.update()
 
     def on_text_validate(self):
         """При нажатии кнопки Enter вводит текст выбранного item в строку или открывает меню добавления, если item'ов
