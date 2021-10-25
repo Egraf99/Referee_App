@@ -13,7 +13,7 @@ from kivymd.uix.datatables import MDDataTable
 from kivymd.uix.dialog import MDDialog
 from kivymd.uix.button import MDFlatButton
 from kivymd.uix.textfield import MDTextField
-from kivymd.uix.list import OneLineAvatarIconListItem
+from kivymd.uix.list import OneLineAvatarIconListItem, OneLineIconListItem
 from kivymd.uix.snackbar import Snackbar
 from kivy.uix.behaviors.focus import FocusBehavior
 from kivy.uix.recycleview import RecycleView
@@ -117,7 +117,7 @@ class MatchTable(MDDataTable):
         self.elevation = 100
         self.rows_num = 10
         self.cell_size = dp(25)
-        self.use_pagination = True
+        self.use_pagination = False
         self.check = True
         self.column_data = [('Дата', dp(28)),
                             ('Время', dp(12)),
@@ -189,10 +189,6 @@ def take_data(name_table: str):
     return []
 
 
-class MenuHeader(MDBoxLayout):
-    '''An instance of the class that will be added to the menu header.'''
-
-
 class DropMenu(MDDropdownMenu):
     def __init__(self, **kwargs):
         self.width_mult = dp(4)
@@ -225,9 +221,9 @@ class AddDataContent(RecycleView):
         self.caller_ = caller
         self._add_item_in_boxlayout(filled)
 
-        self.set_focus()
+        Clock.schedule_once(self.set_focus)
 
-    def set_focus(self):
+    def set_focus(self, dt=None):
         for field in self.ids.box.children[::-1]:
             if not field.text:
                 field.focus = True
@@ -244,7 +240,7 @@ class AddDataContent(RecycleView):
 
     def _get_box_height(self):
         """Устанавливает высоту BoxLayout в зависимости от количества items."""
-        height = len(self.items) * 53.5
+        height = len(self.items) * 63.5
         return dp(height)
 
     def _add_item_in_boxlayout(self, filled):
@@ -275,13 +271,11 @@ class AddDataContent(RecycleView):
                 # запоминаем текст из полей, данные из которых будут записаны в вызывающем поле
                 caller_field_text = " ".join([caller_field_text, field.text])
 
-            if field.is_notnull and not field.text:  # ищем необходимые не заполненные поля
-                not_fill_fields.append(field.name.capitalize())
-
-            elif field.text and field.set_id:  # поле, имеющее всплывающее окно записываются в БД через id
+            if field.required and not field.text:  # ищем необходимые не заполненные поля
+                not_fill_fields.append(field.hint_text)
+            elif field.text and field.have_drop_menu:  # поле, имеющее всплывающее окно записываются в БД через id
                 # если полей заполнения несколько, разбиваем строку по пробелу
                 all_conditions = field.text.split(' ') if len(field.what_fields_child_fill) > 1 else [field.text]
-
                 conditions_dict = {}
 
                 # составляем псписок, где ключ - поле в БД, по которому искать, значение - фильтрующее значение
@@ -292,18 +286,18 @@ class AddDataContent(RecycleView):
                         continue
 
                 # запрашиваем id исходя из условий
-                id_ = DB.take_id(field.data_table, conditions_dict)[0]
-                if id_:
+                try:
+                    id_ = DB.take_id(field.data_table, conditions_dict)[0]
                     data[field.data_key] = id_
-                else:
-                    print(f'Для имени {field.text} нет id')
+                except TypeError:
+                    open_dialog(f'Name "{field.text}" is not found in the table {field.data_table.capitalize()}')
 
             elif field.text:  # поля не пустые, текст из которых прямо идет в БД
                 data[field.data_key] = field.text
 
         if not_fill_fields:  # если есть незаполненные поля вызываем подсказку и возвращаем неуспех
-            not_filled = ", ".join(not_fill_fields)
-            open_dialog(f'The {not_filled} field/s is not filled on')
+            not_filled = "\n".join(f"   - {text}" for text in not_fill_fields)
+            open_dialog(f"The fields:\n{not_filled}\n is not filled on")
             return False
 
         if self.caller_:
@@ -329,7 +323,9 @@ class AddDataContent(RecycleView):
                 #  в списке Widget.parent последние добавленные виджеты лежат в начале,
                 # поэтому слудующий виджет имеет предыдущий индекс
                 if not widgets[inx - 1].text:
+                    next_widget = widgets[inx - 1]
                     widgets[inx - 1].focus = True
+                    self.scroll_to(next_widget)
 
 
 class AddGameContent(AddDataContent):
@@ -433,19 +429,22 @@ class TextField(MDTextField):
         super(TextField, self).__init__(**kwargs)
         self.set_text(self, text)
 
-        self.name = instr.setdefault('name')
+        self.hint_text = instr.setdefault('name').capitalize()
+        self.required = instr.setdefault('notnull', False)
+        self.helper_text_mode = "on_error"
+
         self.data_key = instr.setdefault('data_key')
         self.data_table = instr.setdefault('data_table')
-        self.is_notnull = instr.setdefault('notnull', False)
         self.what_fields_child_fill = instr.setdefault('what_fields_child_fill')
         self.add_text_in_parent = instr.setdefault('add_text_in_parent', False)
 
-        self.set_id = False
+        self.have_drop_menu = False
         self.change_focus = False
 
-        self.hint_text = "! " + self.name if self.is_notnull else self.name
-
     def on_focus_(self):
+        pass
+
+    def on_double_tap(self):
         self.text = ""
 
     def on_cursor_(self):
@@ -569,7 +568,7 @@ class TFWithDrop(TextField):
     def __init__(self, instr, text='', **kwargs):
         super(TFWithDrop, self).__init__(instr, text, **kwargs)
 
-        self.set_id = True
+        self.have_drop_menu = True
 
         self.drop_menu = DropMenu()  # header_cls=MenuHeader()
 
@@ -581,8 +580,6 @@ class TFWithDrop(TextField):
 
     def on_focus_(self):
         """Открытие всплывающего меню."""
-        self.text = ""
-
         # устанавливаем для всплывающего меню поле ввода, откуда его вызывали
         self.drop_menu.caller = self
 

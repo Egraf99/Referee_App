@@ -62,32 +62,8 @@
 
     MDBoxLayout:
         id: box
+        spacing: "10dp"
         orientation: "vertical"
         size_hint_y: None
         height: root._get_box_height()
 
-<MenuHeader>:
-    orientation: "vertical"
-    adaptive_size: True
-    padding: "4dp"
-
-    MDBoxLayout:
-        spacing: "12dp"
-        adaptive_size: True
-
-        OneLineListItem:
-            id: icon
-#            icon: "gesture-tap-button"
-            pos_hint: {"center_y": .5}
-            on_release: root.print
-            on_press: root.print
-            on_touch_down: root.print
-            color: [255,255,225,1]
-
-        MDLabel:
-            text: "Actions"
-            adaptive_size: True
-            pos_hint: {"center_y": .5}
-
-
-<DropMenuTest>:
