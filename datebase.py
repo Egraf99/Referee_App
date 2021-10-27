@@ -1,8 +1,9 @@
 import sqlite3
+from typing import Optional
 
 
 class ConnDB:
-    def take_games(self):
+    def take_games(self) -> list:
         sql = '''SELECT league.name, year||' '||month||' '||day AS date,
                         time, stadium.name, th.name, tg.name
                    FROM Games 
@@ -14,52 +15,26 @@ class ConnDB:
 
         return self.select_request(sql)
 
-    def take_stadium(self):
-        sql = '''SELECT name FROM stadium
-                  ORDER BY name ASC'''
+    def take_data(self, what_return: str, table: str,
+                  name_dict: Optional[dict] = None,
+                  one_value: bool = False) -> list:
+        if name_dict:
+            name_list = []
+            for name in name_dict:
+                name_list.append(f'{name} = "{name_dict[name]}"')
 
-        return self.select_request(sql)
+            conditions = " AND ".join(name_list)
 
-    def take_referee(self):
-        sql = '''SELECT second_name||' '||first_name AS name
-                   FROM referee
-                  ORDER BY name ASC'''
-        return self.select_request(sql)
+            sql = f'''SELECT {what_return} FROM {table} WHERE {conditions}'''
 
-    def take_team(self):
-        sql = '''SELECT name FROM team
-                  ORDER BY name ASC'''
-        return self.select_request(sql)
+        else:
+            sql = f'''SELECT {what_return} FROM {table}'''
 
-    def take_league(self):
-        sql = '''SELECT name FROM league
-                  ORDER BY name ASC'''
-        return self.select_request(sql)
+        print(sql)
 
-    def take_category(self):
-        sql = '''SELECT name FROM category
-                  ORDER BY name ASC'''
-        return self.select_request(sql)
+        return self.select_request(sql, one_value=one_value)
 
-    def take_city(self):
-        sql = '''SELECT name FROM city
-                ORDER BY name ASC'''
-
-        return self.select_request(sql)
-
-    def take_id(self, table, name_dict):
-        name_list = []
-        for name in name_dict:
-            name_list.append(f'{name} = "{name_dict[name]}"')
-
-        conditions = " AND ".join(name_list)
-        sql = f'''SELECT id FROM {table} WHERE {conditions}'''
-
-        # print(sql)
-
-        return self.select_request(sql, one=True)
-
-    def insert(self, table, data: dict):
+    def insert(self, table: str, data: dict) -> None:
         self._convert_special_date(data)
 
         column = ','.join(d for d in data.keys())
@@ -73,7 +48,7 @@ class ConnDB:
         self.insert_request(sql, values)
 
     @staticmethod
-    def _convert_special_date(data):
+    def _convert_special_date(data: dict) -> None:
         """Преаобразует специальные поля (дата, время, телефон) в формат значений БД."""
         if "date_and_time" in data.keys():
             # year, day, month, time
@@ -95,17 +70,17 @@ class ConnDB:
 
             data['phone'] = int(phone_)
 
-    def select_request(self, sql, one=False):
+    def select_request(self, sql: str, one_value: bool = False) -> list:
         self.cursor = sqlite3.connect('referee.db').cursor()
         self.cursor.execute(sql)
-        if one:
-            games = self.cursor.fetchone()
+        if one_value:
+            data = self.cursor.fetchone()
         else:
-            games = self.cursor.fetchall()
+            data = self.cursor.fetchall()
 
         self.cursor.close()
 
-        return games
+        return data
 
     def insert_request(self, sql, values):
         self.conn = sqlite3.connect('referee.db')

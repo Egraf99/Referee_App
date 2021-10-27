@@ -1,6 +1,8 @@
 import re
+from typing import Optional
 
-from kivy.uix.widget import WidgetException
+# from kivy.uix.widget import WidgetException
+from kivymd.uix.snackbar import Snackbar
 from kivy.clock import Clock
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.scrollview import ScrollView
@@ -11,7 +13,7 @@ from kivymd.uix.boxlayout import MDBoxLayout
 from kivymd.uix.card import MDCard
 from kivymd.uix.datatables import MDDataTable
 from kivymd.uix.dialog import MDDialog
-from kivymd.uix.button import MDFlatButton
+from kivymd.uix.button import MDFlatButton, MDFloatingActionButton
 from kivymd.uix.textfield import MDTextField
 from kivymd.uix.list import OneLineAvatarIconListItem, OneLineIconListItem
 from kivymd.uix.snackbar import Snackbar
@@ -24,10 +26,11 @@ from datebase import ConnDB
 
 
 def open_dialog(text):
-    dialog = MDDialog(text=text)
-    dialog.open()
+    MDDialog(text=text).open()
 
-    # dialog.dismiss()
+
+def open_snackbar(text):
+    Snackbar(text=text).open()
 
 
 class GameScreen(BoxLayout):
@@ -43,34 +46,31 @@ class GameScreen(BoxLayout):
         # при первом включении необходимо показать контент
         self._create_main_page()
 
-    def _create_main_page(self):
+    def _create_main_page(self) -> None:
         self.games_layout.clear_widgets()
         self.games_layout.add_widget(self.table_games)
 
-    def add_button_callback(self, instance):
-        """Вызывается при нажатии на одну из кнопок MDFloatingActionButtonSpeedDial.
-         Проверяет нажатую кнопку и открывает необходимый Dialog."""
+    def add_button_callback(self) -> None:
+        """Вызывается при нажатии на MDFloatingActionButton.
+         Открывает окно добавления новой игры."""
+        self.pop_dialog_add_match()
 
-        # пока что работает одна кнопка из трех
-        if instance.icon == "cookie-plus-outline":
-            self.pop_dialog_add_match()
-
-    def pop_dialog_add_match(self):
+    def pop_dialog_add_match(self) -> None:
         """Открывает Dialog для добавления новой игры."""
-        self.add_game_dialog = AddDataWindow(type_="games")
+        self.add_game_dialog = AddDataWindow(type_="games", filled=None, caller=None)
         self.add_game_dialog.open()
 
-    def update_db(self, event):
+    def update_db(self, event) -> None:
         """Вызывается при нажатии на кнопку ADD."""
         self.add_game_dialog.content_cls.update_db()
 
-    def dismiss_dialog(self, event):
+    def dismiss_dialog(self, event) -> None:
         """Закрывает Dialog."""
         self.add_game_dialog.dismiss()
 
 
 class AddDataWindow(MDDialog):
-    def __init__(self, type_, filled=None, caller=None, **kwargs):
+    def __init__(self, type_: str, filled: Optional[dict], caller, **kwargs):
         title = " ".join(['Add', type_])
         self.caller_ = caller
         filled = filled if filled else {}
@@ -79,12 +79,12 @@ class AddDataWindow(MDDialog):
         self.title = title
         self.type = "custom"
         self._set_content_cls(type_, filled)
-        self.buttons = [MDFlatButton(text="CANCEL", on_release=self._dropmenu_dismiss),
+        self.buttons = [MDFlatButton(text="CANCEL", on_release=self.dismiss),
                         MDFlatButton(text="ADD", on_release=self._add_button_click)]
 
         super(AddDataWindow, self).__init__(**kwargs)
 
-    def _set_content_cls(self, type_, filled):
+    def _set_content_cls(self, type_: str, filled: Optional[dict]) -> None:
         if type_ == "games":
             self.content_cls = AddGameContent(filled, caller=self.caller_)
         if type_ == "referee":
@@ -100,14 +100,11 @@ class AddDataWindow(MDDialog):
         if type_ == "team":
             self.content_cls = AddTeamContent(filled, caller=self.caller_)
 
-    def _add_button_click(self, event):
+    def _add_button_click(self, event) -> None:
         """Вызывается при нажатии кнопки ADD"""
         success = self.content_cls.update_db()
         if success and self.caller_:
             self.caller_.parent.parent.set_focus()
-
-    def _dropmenu_dismiss(self, event):
-        self.dismiss()
 
 
 class MatchTable(MDDataTable):
@@ -118,8 +115,8 @@ class MatchTable(MDDataTable):
         self.rows_num = 10
         self.cell_size = dp(25)
         self.use_pagination = False
-        self.check = True
-        self.column_data = [('Дата', dp(28)),
+        self.check = False
+        self.column_data = [('Дата', dp(20)),
                             ('Время', dp(12)),
                             ('Лига', self.cell_size),
                             ('Стадион', self.cell_size),
@@ -174,30 +171,33 @@ class MatchTable(MDDataTable):
         return number
 
 
-def take_data(name_table: str):
+def take_data(table: str):
     """Возвращает значение из БД с помощью функций класса DB.
 
-     :argument name_table (str) - из какой таблицы брать значения. В классе DB должен быть метод take_{mode}."""
+     :argument table (str) - из какой таблицы брать значения. В классе DB должен быть метод take_{mode}."""
 
-    if name_table:
-        db_method = f"take_{name_table}"
-        try:
-            data = getattr(DB, db_method)()
-            return data
-        except AttributeError:
-            print(f"\n!!!!!!!!!!!!!!!\n ConnDB has no {db_method}\n!!!!!!!!!!!!!!!\n")
-    return []
+    try:
+        if table == "referee":
+            data = DB.take_data("second_name||' '||first_name", table)
+            print(data)
+        else:
+            data = DB.take_data("name", table)
+
+        return data
+
+    except AttributeError:
+        print(f"\n!!!!!!!!!!!!!!!\n ConnDB has no table '{table}'\n!!!!!!!!!!!!!!!\n")
+        return []
 
 
 class DropMenu(MDDropdownMenu):
     def __init__(self, **kwargs):
         self.width_mult = dp(4)
         self.max_height = dp(250)
-        self.box = BoxLayout(orientation="vertical")
 
         super(DropMenu, self).__init__(**kwargs)
 
-    def set_items(self, text_list, list_items: list):
+    def set_items(self, text_list, list_items: list, added_item=None):
         """Добавляет items в DropMenu."""
         if list_items:
             self.items = [{"text": f"{x}",
@@ -205,7 +205,7 @@ class DropMenu(MDDropdownMenu):
                            "on_release": lambda x=f"{x}": text_list.add_item_in_text_input(x),
                            } for x in list_items]
         else:
-            self.items = [{"text": "Add in base",
+            self.items = [{"text": f'Add "{added_item}" in base',
                            "viewclass": "OneLineListItem",
                            "on_release": lambda: text_list._drop_menu_add_data_and_close()}]
 
@@ -221,7 +221,7 @@ class AddDataContent(RecycleView):
         self.caller_ = caller
         self._add_item_in_boxlayout(filled)
 
-        Clock.schedule_once(self.set_focus)
+        Clock.schedule_once(self.set_focus, .3)
 
     def set_focus(self, dt=None):
         for field in self.ids.box.children[::-1]:
@@ -287,7 +287,7 @@ class AddDataContent(RecycleView):
 
                 # запрашиваем id исходя из условий
                 try:
-                    id_ = DB.take_id(field.data_table, conditions_dict)[0]
+                    id_ = DB.take_data("id", field.data_table, conditions_dict, one_value=True)[0]
                     data[field.data_key] = id_
                 except TypeError:
                     open_dialog(f'Name "{field.text}" is not found in the table {field.data_table.capitalize()}')
@@ -300,9 +300,6 @@ class AddDataContent(RecycleView):
             open_dialog(f"The fields:\n{not_filled}\n is not filled on")
             return False
 
-        if self.caller_:
-            self.caller_.text = caller_field_text.strip()
-
         DB.insert(self.data_table, data)
 
         # self.parent - BoxLayout, self.parent.parent - MDCard, self.parent.parent.parent - AddDataWindow
@@ -311,6 +308,10 @@ class AddDataContent(RecycleView):
         if not self.caller_:
             open_dialog("Successfully added")
             main.game_screen.table_games.update()
+
+        else:
+            self.caller_.text = caller_field_text.strip()
+            open_snackbar(f"{self.caller_.name.title()} {self.caller_.text} successfully added")
 
         return True
 
@@ -429,7 +430,7 @@ class TextField(MDTextField):
         super(TextField, self).__init__(**kwargs)
         self.set_text(self, text)
 
-        self.hint_text = instr.setdefault('name').capitalize()
+        self.name = self.hint_text = instr.setdefault('name').capitalize()
         self.required = instr.setdefault('notnull', False)
         self.helper_text_mode = "on_error"
 
@@ -605,9 +606,8 @@ class TFWithDrop(TextField):
 
     def insert_text(self, substring, from_undo=False):
         """Обновляет всплывающее меню при вводе текста."""
-        self.update_drop_menu()
-
         super(TFWithDrop, self).insert_text(substring, from_undo=from_undo)
+        self.update_drop_menu()
 
     def update_drop_menu(self):
         """Обновление items всплывающего меню, которые подходят по набранному тексту."""
@@ -620,7 +620,7 @@ class TFWithDrop(TextField):
             if self.text.lower() in item[0].lower():
                 matching_items.append(item)
 
-        self.drop_menu.set_items(self, [i[0] for i in matching_items])
+        self.drop_menu.set_items(self, [i[0] for i in matching_items], added_item=self.text)
         self.drop_menu.update()
 
     def on_text_validate(self):

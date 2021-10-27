@@ -21,15 +21,12 @@
                 BoxLayout:
                     id: games_layout
 
-                MDFloatingActionButtonSpeedDial:
+                MDFloatingActionButton:
                     rotation_root_button: True
-                    callback: root.add_button_callback
-                    data:
-                        {'Stadium': 'stadium-variant',
-                        'Referee': 'account-plus-outline',
-                        'Game': 'cookie-plus-outline'}
+                    pos_hint: {'center_x': .93, 'center_y': .1}
                     icon: 'plus'
                     md_bg_color: app.theme_cls.primary_color
+                    on_press: root.add_button_callback()
 
             MDBottomNavigationItem:
                 name: 'finance'
