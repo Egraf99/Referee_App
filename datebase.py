@@ -16,23 +16,24 @@ class ConnDB:
         return self.select_request(sql)
 
     def take_data(self, what_return: str, table: str,
-                  name_dict: Optional[dict] = None,
+                  conditions: Optional[dict] = None,
                   one_value: bool = False) -> list:
-        if name_dict:
+        values = None
+        if conditions:
             name_list = []
-            for name in name_dict:
-                name_list.append(f'{name} = "{name_dict[name]}"')
+            values = []
+            for name in conditions:
+                name_list.append(f'{name} = ?')
+                values.append(conditions[name])
 
-            conditions = " AND ".join(name_list)
+            conditions_str = " AND ".join(name_list)
 
-            sql = f'''SELECT {what_return} FROM {table} WHERE {conditions}'''
+            sql = f'''SELECT {what_return} FROM {table} WHERE {conditions_str}'''
 
         else:
             sql = f'''SELECT {what_return} FROM {table}'''
 
-        print(sql)
-
-        return self.select_request(sql, one_value=one_value)
+        return self.select_request(sql, values, one_value=one_value)
 
     def insert(self, table: str, data: dict) -> None:
         self._convert_special_date(data)
@@ -70,9 +71,9 @@ class ConnDB:
 
             data['phone'] = int(phone_)
 
-    def select_request(self, sql: str, one_value: bool = False) -> list:
+    def select_request(self, sql: str, values: Optional[list] = None, one_value: bool = False) -> list:
         self.cursor = sqlite3.connect('referee.db').cursor()
-        self.cursor.execute(sql)
+        self.cursor.execute(sql, values)
         if one_value:
             data = self.cursor.fetchone()
         else:
@@ -90,7 +91,4 @@ class ConnDB:
 
 
 if __name__ == '__main__':
-    ConnDB().insert('game',
-                          {'chief_referee': 'Ходин Егор', 'guest_team': 'Смена-2', 'home_team': 'Смена-2',
-                           'league': 'ЛФК А',
-                           'date_and_time': '12.04.2021 15:00', 'stadium': 'Сапсан Арена'})
+    print(ConnDB().take_data("id", "referee", {"first_name": "Егор", "second_name": "Ходин"}, one_value=True))

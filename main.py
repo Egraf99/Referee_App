@@ -278,7 +278,7 @@ class AddDataContent(RecycleView):
                 all_conditions = field.text.split(' ') if len(field.what_fields_child_fill) > 1 else [field.text]
                 conditions_dict = {}
 
-                # составляем псписок, где ключ - поле в БД, по которому искать, значение - фильтрующее значение
+                # составляем словарь, где ключ - поле в БД, по которому искать, значение - фильтрующее значение
                 for inx, condition in enumerate(all_conditions):
                     try:
                         conditions_dict[field.what_fields_child_fill[inx]] = condition
