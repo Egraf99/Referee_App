@@ -184,7 +184,6 @@ def take_name(table: str) -> list:
     try:
         if table == "referee":
             data = DB.take_data("second_name||' '||first_name", table)
-            print(data)
         else:
             data = DB.take_data("name", table)
 
@@ -230,7 +229,7 @@ class AddDataContent(RecycleView):
         self.children_ = []
         self._add_items_in_box(self.items, self.ids.box, filled_field)
 
-        Clock.schedule_once(self.set_focus, .3)
+        Clock.schedule_once(self.set_focus, .5)
 
     def _add_items_in_box(self, items: list, box: Layout, filled_field: dict = None):
         """Добавляет items в главный BoxLayout.
@@ -239,7 +238,7 @@ class AddDataContent(RecycleView):
             items (list)- список добавляемых объектов. Список может содержать в себе словарь или новый список.
                 - Если объект словарь, то объект занимает всю ширину Content.
                 - Если объект список, то все объекты внутри этого списка занимают ширину Content
-                                                                                        в новом горизонтальном BoxLayout.
+                                                                                    в новом горизонтальном BoxLayout.
                   Ширина отдельного объекта зависит от значения 'size_hint_x' в словаре.
 
             box (BoxLayout)- контейнер для добавления объектов.
@@ -247,30 +246,44 @@ class AddDataContent(RecycleView):
                                               значения - текстом, которым их надо заполнять."""
         for item in items:
             if type(item) == list:
-                hor_box = BoxLayout(orientation="horizontal", spacing=dp(50))
+                hor_box = BoxLayout(orientation="horizontal", spacing=dp(10))
                 box.add_widget(hor_box)
                 self._add_items_in_box(item, hor_box, filled_field)
 
-            if type(item) == dict:
+            elif type(item) == dict:
                 # заполняет уже имеющиеся данные в строке, если есть
                 text = filled_field.pop(item['data_key'], '')
+                class_ = item.setdefault('class', '')
+                type_ = item.setdefault('type', '')
 
-                name = item.setdefault('name')
-                if name == 'Data and Time':
-                    self._add_widget(DateAndTimeTF(self, item, text=text), box)
-                elif name == 'Phone':
-                    self._add_widget(PhoneTF(self, item, text=text), box)
-                elif item.setdefault('drop_menu', False):
-                    self._add_widget(TFWithDrop(self, item, text=text), box)
-                else:
-                    self._add_widget(TFWithoutDrop(self, item, text=text), box)
+                if class_ == "textfield":
+                    self._add_textfield(type_, item, text, box)
+                elif class_ == "checkbutton":
+                    self._add_checkbutton()
+
+    def _add_textfield(self, type_, instr, text, box):
+        size_hint_x = instr.setdefault('size_hint_x', 1)
+
+        if type_ == 'date_and_time':
+            self._add_widget(DateAndTimeTF(size_hint_x=size_hint_x, parent=self, instruction=instr, text=text), box)
+        elif type_ == 'phone':
+            self._add_widget(PhoneTF(size_hint_x=size_hint_x, parent=self, instruction=instr, text=text), box)
+        elif type_ == 'age':
+            self._add_widget(AgeTF(size_hint_x=size_hint_x, parent=self, instruction=instr, text=text), box)
+        elif instr.setdefault('drop_menu', False):
+            self._add_widget(TFWithDrop(size_hint_x=size_hint_x, parent=self, instruction=instr, text=text), box)
+        else:
+            self._add_widget(TFWithoutDrop(size_hint_x=size_hint_x, parent=self, instruction=instr, text=text), box)
+
+    def _add_checkbutton(self):
+        pass
 
     def _add_widget(self, widget, box: Layout):
         box.add_widget(widget)
         self.children_.append(widget)
 
     def set_focus(self, dt=None):
-        for field in self.ids.box.children[::-1]:
+        for field in self.children_:
             if not field.text:
                 field.focus = True
                 break
@@ -291,13 +304,13 @@ class AddDataContent(RecycleView):
 
     def update_db(self):
         """Обрабатывает полученные из полей данные и отправляет на обновление БД."""
-        fields = self.ids.box.children
+        fields = self.children_
 
         not_fill_fields = []
         caller_field_text = ""
         data = {}
 
-        for field in fields[::-1]:
+        for field in fields:
             if field.add_text_in_parent:
                 # запоминаем текст из полей, данные из которых будут записаны в вызывающем поле
                 caller_field_text = " ".join([caller_field_text, field.text])
@@ -352,6 +365,10 @@ class AddDataContent(RecycleView):
 
         for inx, widget in enumerate(widgets):
             if widget is previous_widget:
+                try:
+                    widgets[inx + 1]
+                except IndexError:
+                    continue
                 if not widgets[inx + 1].text:
                     next_widget = widgets[inx + 1]
                     next_widget.focus = True
@@ -362,28 +379,31 @@ class AddGameContent(AddDataContent):
     def __init__(self, filled_field, caller=None, **kwargs):
         self.data_table = "games"
         self.items = [
-            {'name': 'Stadium', 'type': 'textfield', 'what_fields_child_fill': ['name'],
+            {'name': 'Stadium', 'class': 'textfield', 'what_fields_child_fill': ['name'],
              'data_table': 'stadium', 'data_key': 'stadium_id', 'drop_menu': True, 'notnull': True},
-            {'name': 'Data and Time', 'type': 'textfield', 'data_key': 'date_and_time', 'notnull': True},
-            {'name': 'League', 'type': 'textfield', 'what_fields_child_fill': ['name'],
+            {'name': 'Data and Time', 'class': 'textfield', 'type': 'date_and_time', 'data_key': 'date_and_time', 'notnull': True},
+            {'name': 'League', 'class': 'textfield', 'what_fields_child_fill': ['name'],
              'data_table': 'league', 'data_key': 'league_id', 'drop_menu': True, 'notnull': True},
             [
-                {'name': 'Home team', 'type': 'textfield', 'what_fields_child_fill': ['name'],
-                 'data_table': 'team', 'data_key': 'team_home', 'drop_menu': True, 'notnull': True, 'size_hint_x': 0.2},
-                {'name': 'Age home team', 'type': 'textfield', 'data_key': '???', 'size_hint_x': 0.2}
+                {'name': 'Home team', 'class': 'textfield', 'what_fields_child_fill': ['name'],
+                 'data_table': 'team', 'data_key': 'team_home', 'drop_menu': True, 'notnull': True},
+                {'name': 'Age home team', 'class': 'textfield', 'type': 'age', 'data_key': 'team_home_year', 'size_hint_x': 0.35}
             ],
-            {'name': 'Guest team', 'type': 'textfield', 'what_fields_child_fill': ['name'],
+            [
+                {'name': 'Guest team', 'class': 'textfield', 'what_fields_child_fill': ['name'],
              'data_table': 'team', 'data_key': 'team_guest', 'drop_menu': True, 'notnull': True},
-            {'name': 'Chief referee', 'type': 'textfield',
+                {'name': 'Age guest team', 'class': 'textfield', 'type': 'age', 'data_key': 'team_guest_year', 'size_hint_x': 0.35}
+            ],
+            {'name': 'Chief referee', 'class': 'textfield',
              'what_fields_child_fill': ['second_name', 'first_name', 'third_name'],
              'data_table': 'referee', 'data_key': 'referee_chief', 'drop_menu': True, 'notnull': True},
-            {'name': 'First referee', 'type': 'textfield',
+            {'name': 'First referee', 'class': 'textfield',
              'what_fields_child_fill': ['second_name', 'first_name', 'third_name'],
              'data_table': 'referee', 'data_key': 'referee_first', 'drop_menu': True},
-            {'name': 'Second referee', 'type': 'textfield',
+            {'name': 'Second referee', 'class': 'textfield',
              'what_fields_child_fill': ['second_name', 'first_name', 'third_name'],
              'data_table': 'referee', 'data_key': 'referee_second', 'drop_menu': True},
-            {'name': 'Reserve referee', 'type': 'textfield',
+            {'name': 'Reserve referee', 'class': 'textfield',
              'what_fields_child_fill': ['second_name', 'first_name', 'third_name'],
              'data_table': 'referee', 'data_key': 'referee_reserve', 'drop_menu': True}
         ]
@@ -395,13 +415,13 @@ class AddRefereeContent(AddDataContent):
     def __init__(self, filled_field, caller=None, **kwargs):
         self.data_table = "referee"
         self.items = [
-            {'name': 'Second name', 'type': 'textfield', 'data_key': 'second_name', 'notnull': True,
+            {'name': 'Second name', 'class': 'textfield', 'data_key': 'second_name', 'notnull': True,
              'add_text_in_parent': True},
-            {'name': 'Fist name', 'type': 'textfield', 'data_key': 'first_name', 'notnull': True,
+            {'name': 'Fist name', 'class': 'textfield', 'data_key': 'first_name', 'notnull': True,
              'add_text_in_parent': True},
-            {'name': 'Third name', 'type': 'textfield', 'data_key': 'third_name'},
-            {'name': 'Phone', 'type': 'textfield', 'data_key': 'phone'},
-            {'name': 'Category', 'type': 'textfield', 'what_fields_child_fill': ['name'],
+            {'name': 'Third name', 'class': 'textfield', 'data_key': 'third_name'},
+            {'name': 'Phone', 'class': 'textfield', 'type': 'phone', 'data_key': 'phone'},
+            {'name': 'Category', 'class': 'textfield', 'what_fields_child_fill': ['name'],
              'data_table': 'category', 'data_key': 'category_id', 'drop_menu': True}
         ]
 
@@ -412,10 +432,10 @@ class AddStadiumContent(AddDataContent):
     def __init__(self, filled_field, caller=None, **kwargs):
         self.data_table = "stadium"
         self.items = [
-            {'name': 'Name', 'type': 'textfield', 'data_key': 'name', 'notnull': True, 'add_text_in_parent': True},
-            {'name': 'City', 'type': 'textfield', 'what_fields_child_fill': ['name'],
+            {'name': 'Name', 'class': 'textfield', 'data_key': 'name', 'notnull': True, 'add_text_in_parent': True},
+            {'name': 'City', 'class': 'textfield', 'what_fields_child_fill': ['name'],
              'data_table': 'city', 'data_key': 'city_id', 'drop_menu': True, 'notnull': True},
-            {'name': 'Address', 'type': 'textfield', 'data_key': 'address', 'notnull': True},
+            {'name': 'Address', 'class': 'textfield', 'data_key': 'address', 'notnull': True},
         ]
 
         super(AddStadiumContent, self).__init__(filled_field, caller, **kwargs)
@@ -425,7 +445,7 @@ class AddLeagueContent(AddDataContent):
     def __init__(self, filled_field, caller=None, **kwargs):
         self.data_table = "league"
         self.items = [
-            {'name': 'Name', 'type': 'textfield', 'data_key': 'name', 'notnull': True, 'add_text_in_parent': True}]
+            {'name': 'Name', 'class': 'textfield', 'data_key': 'name', 'notnull': True, 'add_text_in_parent': True}]
 
         super(AddLeagueContent, self).__init__(filled_field, caller, **kwargs)
 
@@ -434,7 +454,7 @@ class AddTeamContent(AddDataContent):
     def __init__(self, filled_field, caller=None, **kwargs):
         self.data_table = "team"
         self.items = [
-            {'name': 'Name', 'type': 'textfield', 'data_key': 'name', 'notnull': True, 'add_text_in_parent': True}]
+            {'name': 'Name', 'class': 'textfield', 'data_key': 'name', 'notnull': True, 'add_text_in_parent': True}]
 
         super(AddTeamContent, self).__init__(filled_field, caller, **kwargs)
 
@@ -443,7 +463,7 @@ class AddCategoryContent(AddDataContent):
     def __init__(self, filled_field, caller=None, **kwargs):
         self.data_table = "category"
         self.items = [
-            {'name': 'Name', 'type': 'textfield', 'data_key': 'name', 'notnull': True, 'add_text_in_parent': True}]
+            {'name': 'Name', 'class': 'textfield', 'data_key': 'name', 'notnull': True, 'add_text_in_parent': True}]
 
         super(AddCategoryContent, self).__init__(filled_field, caller, **kwargs)
 
@@ -452,7 +472,7 @@ class AddCityContent(AddDataContent):
     def __init__(self, filled_field, caller=None, **kwargs):
         self.data_table = "city"
         self.items = [
-            {'name': 'Name', 'type': 'textfield', 'data_key': 'name', 'notnull': True, 'add_text_in_parent': True}]
+            {'name': 'Name', 'class': 'textfield', 'data_key': 'name', 'notnull': True, 'add_text_in_parent': True}]
 
         super(AddCityContent, self).__init__(filled_field, caller, **kwargs)
 
@@ -496,8 +516,8 @@ class TextField(MDTextField):
 
 
 class TFWithoutDrop(TextField):
-    def __init__(self, parent, name, text='', **kwargs):
-        super(TFWithoutDrop, self).__init__(parent, name, text, **kwargs)
+    def __init__(self, parent, instruction, text='', **kwargs):
+        super(TFWithoutDrop, self).__init__(parent, instruction, text, **kwargs)
 
     def on_text_validate(self):
         super(TextField, self).on_text_validate()
@@ -506,8 +526,8 @@ class TFWithoutDrop(TextField):
 
 
 class PhoneTF(TFWithoutDrop):
-    def __init__(self, parent, name, **kwargs):
-        super(PhoneTF, self).__init__(parent, name, **kwargs)
+    def __init__(self, parent, instruction, **kwargs):
+        super(PhoneTF, self).__init__(parent, instruction, **kwargs)
 
         self.helper_text = "X(XXX)XXX-XX-XX"
         self.helper_text_mode = "persistent"
@@ -559,8 +579,8 @@ class PhoneTF(TFWithoutDrop):
 
 
 class DateAndTimeTF(TFWithoutDrop):
-    def __init__(self, parent, name, **kwargs):
-        super(DateAndTimeTF, self).__init__(parent, name, **kwargs)
+    def __init__(self, parent, instruction, **kwargs):
+        super(DateAndTimeTF, self).__init__(parent, instruction, **kwargs)
 
         self.helper_text = "dd.mm.yyyy HH:MM"
         self.helper_text_mode = "persistent"
@@ -593,16 +613,34 @@ class DateAndTimeTF(TFWithoutDrop):
         pat = "^(0?[1-9]|[12][0-9]|3[01]).(0?[0-9]|1[012]).(19|20)?[0-9]{2} ([01][1-9]|2[0-4]):[0-6][0-9]$"
 
         if not re.match(pat, self.text):
-            # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-            # делаем красным очищаем и не меняем фокус
             self.text = ""
 
         super(DateAndTimeTF, self).on_text_validate()
 
 
+class AgeTF(TFWithoutDrop):
+    def __init__(self, parent, instruction, **kwargs):
+        super(AgeTF, self).__init__(parent, instruction, **kwargs)
+
+    def insert_text(self, substring, from_undo=False):
+        cursor = self.cursor_col
+        substring = re.sub('[^0-9]', '', substring)
+        if cursor > 3:
+            substring = ''
+        return super(AgeTF, self).insert_text(substring, from_undo=from_undo)
+
+    def on_text_validate(self):
+        pat = "^(19|20)[0-9]{2}$"
+
+        if not re.match(pat, self.text):
+            self.text = ""
+
+        super(AgeTF, self).on_text_validate()
+
+
 class TFWithDrop(TextField):
-    def __init__(self, parent, instr, text='', **kwargs):
-        super(TFWithDrop, self).__init__(parent, instr, text, **kwargs)
+    def __init__(self, parent, instruction, text='', **kwargs):
+        super(TFWithDrop, self).__init__(parent, instruction, text, **kwargs)
 
         self.have_drop_menu = True
 

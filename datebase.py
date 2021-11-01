@@ -46,7 +46,7 @@ class ConnDB:
 
         print(sql, values)
 
-        self.insert_request(sql, values)
+        # self.insert_request(sql, values)
 
     @staticmethod
     def _convert_special_date(data: dict) -> None:
@@ -73,7 +73,11 @@ class ConnDB:
 
     def select_request(self, sql: str, values: Optional[list] = None, one_value: bool = False) -> list:
         self.cursor = sqlite3.connect('referee.db').cursor()
-        self.cursor.execute(sql, values)
+        if values:
+            self.cursor.execute(sql, values)
+        else:
+            self.cursor.execute(sql)
+
         if one_value:
             data = self.cursor.fetchone()
         else:
