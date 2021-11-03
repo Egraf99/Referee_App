@@ -1,6 +1,5 @@
 import re
-from typing import Optional
-
+from typing import Optional, Any
 from kivy.uix.widget import WidgetException
 from kivymd.uix.snackbar import Snackbar
 from kivy.clock import Clock
@@ -58,7 +57,7 @@ class GameScreen(BoxLayout):
 
     def pop_dialog_add_match(self) -> None:
         """Открывает Dialog для добавления новой игры."""
-        self.add_game_dialog = AddDataWindow(type_="games", filled_field=None, caller=None)
+        self.add_game_dialog = AddDataWindow(type_="games")
         self.add_game_dialog.open()
 
     def update_db(self, event) -> None:
@@ -68,44 +67,6 @@ class GameScreen(BoxLayout):
     def dismiss_dialog(self, event) -> None:
         """Закрывает Dialog."""
         self.add_game_dialog.dismiss()
-
-
-class AddDataWindow(MDDialog):
-    def __init__(self, type_: str, filled_field: Optional[dict], caller, **kwargs):
-        title = " ".join(['Add', type_])
-        self.caller_ = caller
-        filled_field = filled_field if filled_field else {}
-
-        self.auto_dismiss = False
-        self.title = title
-        self.type = "custom"
-        self._set_content_cls(type_, filled_field)
-        self.buttons = [MDFlatButton(text="CANCEL", on_release=self.dismiss),
-                        MDFlatButton(text="ADD", on_release=self._add_button_click)]
-
-        super(AddDataWindow, self).__init__(**kwargs)
-
-    def _set_content_cls(self, type_: str, filled_field: Optional[dict]) -> None:
-        if type_ == "games":
-            self.content_cls = AddGameContent(filled_field, caller=self.caller_)
-        if type_ == "referee":
-            self.content_cls = AddRefereeContent(filled_field, caller=self.caller_)
-        if type_ == "stadium":
-            self.content_cls = AddStadiumContent(filled_field, caller=self.caller_)
-        if type_ == "league":
-            self.content_cls = AddLeagueContent(filled_field, caller=self.caller_)
-        if type_ == "category":
-            self.content_cls = AddCategoryContent(filled_field, caller=self.caller_)
-        if type_ == "city":
-            self.content_cls = AddCityContent(filled_field, caller=self.caller_)
-        if type_ == "team":
-            self.content_cls = AddTeamContent(filled_field, caller=self.caller_)
-
-    def _add_button_click(self, event) -> None:
-        """Вызывается при нажатии кнопки ADD"""
-        success = self.content_cls.update_db()
-        if success and self.caller_:
-            self.caller_.parent.parent.set_focus()
 
 
 class MatchTable(MDDataTable):
@@ -190,8 +151,7 @@ def take_name(table: str) -> list:
         return data
 
     except AttributeError:
-        print(f"\n!!!!!!!!!!!!!!!\n ConnDB has no table '{table}'\n!!!!!!!!!!!!!!!\n")
-        return []
+        raise AttributeError(f"n ConnDB has no table '{table}'")
 
 
 class DropMenu(MDDropdownMenu):
@@ -219,19 +179,75 @@ class DropMenu(MDDropdownMenu):
             self.open()
 
 
+def _clear_kwargs(kwargs: dict, keys: list[str]) -> dict:
+    for key in keys:
+        kwargs.pop(key, None)
+    return kwargs
+
+
+class AddDataWindow(MDDialog):
+    def __init__(self, **kwargs):
+        """Parameters:
+                type_(str) - тип создаваемого MDDialog. type_ может принимать значения: 
+                                                            games, referee, stadium, league, category, city, team."""
+        type_ = kwargs.pop('type_')
+        assert type_ in ["games", "referee", "stadium", "league", "category", "city", "team"], '\
+                    parameter type_ must be in ["games", "referee", "stadium", "league", "category", "city", "team"]'
+
+        title = " ".join(['Add', type_])
+
+        self.auto_dismiss = False
+        self.title = title
+        self.type = "custom"
+        self._set_content_cls(type_, **kwargs)
+        self.buttons = [MDFlatButton(text="CANCEL", on_release=self.dismiss),
+                        MDFlatButton(text="ADD", on_release=self._add_button_click)]
+
+        kwargs = _clear_kwargs(kwargs, ['filled_field', 'caller_'])
+        super(AddDataWindow, self).__init__(**kwargs)
+
+    def _set_content_cls(self, type_, **kwargs) -> None:
+        if type_ == "games":
+            self.content_cls = AddGameContent(**kwargs)
+        if type_ == "referee":
+            self.content_cls = AddRefereeContent(**kwargs)
+        if type_ == "stadium":
+            self.content_cls = AddStadiumContent(**kwargs)
+        if type_ == "league":
+            self.content_cls = AddLeagueContent(**kwargs)
+        if type_ == "category":
+            self.content_cls = AddCategoryContent(**kwargs)
+        if type_ == "city":
+            self.content_cls = AddCityContent(**kwargs)
+        if type_ == "team":
+            self.content_cls = AddTeamContent(**kwargs)
+
+    def _add_button_click(self, event) -> None:
+        """Вызывается при нажатии кнопки ADD"""
+        success = self.content_cls.update_db()
+        if success and self.caller_:
+            self.caller_.parent.parent.set_focus()
+
+
 class AddDataContent(RecycleView):
-    def __init__(self, filled_field, caller, **kwargs):
+    def __init__(self, **kwargs):
+        """Parameters:
+                caller_ (Any) - объект, создавший и вызвавший этот класс.
+                filled_field (dict[str, str]) - словарь уже заполненных полей, где
+                                      ключом является название TextField, в которое нужно добавить текст, а
+                                      значением является добавляемый текст."""
+
+        self.caller_ = kwargs.pop('caller_', None)
+        self.filled_field = kwargs.pop('filled_field', {})
+
         super(AddDataContent, self).__init__(**kwargs)
 
-        # объект, создавший и вызвавший этот класс
-        self.caller_ = caller
-
         self.children_ = []
-        self._add_items_in_box(self.items, self.ids.box, filled_field)
+        self._add_items_in_box(self.items, self.ids.box)
 
-        Clock.schedule_once(self.set_focus, .5)
+        # Clock.schedule_once(self.set_focus, .5)
 
-    def _add_items_in_box(self, items: list, box: Layout, filled_field: dict = None):
+    def _add_items_in_box(self, items: list, box: Layout):
         """Добавляет items в главный BoxLayout.
 
         Parameters:
@@ -246,13 +262,13 @@ class AddDataContent(RecycleView):
                                               значения - текстом, которым их надо заполнять."""
         for item in items:
             if type(item) == list:
-                hor_box = BoxLayout(orientation="horizontal", spacing=dp(10))
+                hor_box = MDBoxLayout(orientation="horizontal", spacing=dp(10), adaptive_height=True)
                 box.add_widget(hor_box)
-                self._add_items_in_box(item, hor_box, filled_field)
+                self._add_items_in_box(item, hor_box)
 
             elif type(item) == dict:
                 # заполняет уже имеющиеся данные в строке, если есть
-                text = filled_field.pop(item['data_key'], '')
+                text = self.filled_field.pop(item['data_key'], '')
                 class_ = item.setdefault('class', '')
                 type_ = item.setdefault('type', '')
 
@@ -265,15 +281,15 @@ class AddDataContent(RecycleView):
         size_hint_x = instr.setdefault('size_hint_x', 1)
 
         if type_ == 'date_and_time':
-            self._add_widget(DateAndTimeTF(size_hint_x=size_hint_x, parent=self, instruction=instr, text=text), box)
+            self._add_widget(DateAndTimeTF(parent_=self, instruction=instr, text=text, size_hint_x=size_hint_x), box)
         elif type_ == 'phone':
-            self._add_widget(PhoneTF(size_hint_x=size_hint_x, parent=self, instruction=instr, text=text), box)
+            self._add_widget(PhoneTF(parent_=self, instruction=instr, text=text, size_hint_x=size_hint_x), box)
         elif type_ == 'age':
-            self._add_widget(AgeTF(size_hint_x=size_hint_x, parent=self, instruction=instr, text=text), box)
+            self._add_widget(YearTF(parent_=self, instruction=instr, text=text, size_hint_x=size_hint_x), box)
         elif instr.setdefault('drop_menu', False):
-            self._add_widget(TFWithDrop(size_hint_x=size_hint_x, parent=self, instruction=instr, text=text), box)
+            self._add_widget(TFWithDrop(parent_=self, instruction=instr, text=text, size_hint_x=size_hint_x), box)
         else:
-            self._add_widget(TFWithoutDrop(size_hint_x=size_hint_x, parent=self, instruction=instr, text=text), box)
+            self._add_widget(TFWithoutDrop(parent_=self, instruction=instr, text=text, size_hint_x=size_hint_x), box)
 
     def _add_checkbutton(self):
         pass
@@ -299,7 +315,7 @@ class AddDataContent(RecycleView):
 
     def _get_box_height(self):
         """Устанавливает высоту BoxLayout в зависимости от количества items."""
-        height = len(self.items) * 63.5
+        height = len(self.items) * 62
         return dp(height)
 
     def update_db(self):
@@ -376,7 +392,8 @@ class AddDataContent(RecycleView):
 
 
 class AddGameContent(AddDataContent):
-    def __init__(self, filled_field, caller=None, **kwargs):
+    def __init__(self, **kwargs):
+
         self.data_table = "games"
         self.items = [
             {'name': 'Stadium', 'class': 'textfield', 'what_fields_child_fill': ['name'],
@@ -387,12 +404,12 @@ class AddGameContent(AddDataContent):
             [
                 {'name': 'Home team', 'class': 'textfield', 'what_fields_child_fill': ['name'],
                  'data_table': 'team', 'data_key': 'team_home', 'drop_menu': True, 'notnull': True},
-                {'name': 'Age home team', 'class': 'textfield', 'type': 'age', 'data_key': 'team_home_year', 'size_hint_x': 0.35}
+                {'name': 'Year home team', 'class': 'textfield', 'type': 'age', 'data_key': 'team_home_year', 'size_hint_x': 0.35}
             ],
             [
                 {'name': 'Guest team', 'class': 'textfield', 'what_fields_child_fill': ['name'],
              'data_table': 'team', 'data_key': 'team_guest', 'drop_menu': True, 'notnull': True},
-                {'name': 'Age guest team', 'class': 'textfield', 'type': 'age', 'data_key': 'team_guest_year', 'size_hint_x': 0.35}
+                {'name': 'Year guest team', 'class': 'textfield', 'type': 'age', 'data_key': 'team_guest_year', 'size_hint_x': 0.35}
             ],
             {'name': 'Chief referee', 'class': 'textfield',
              'what_fields_child_fill': ['second_name', 'first_name', 'third_name'],
@@ -408,11 +425,12 @@ class AddGameContent(AddDataContent):
              'data_table': 'referee', 'data_key': 'referee_reserve', 'drop_menu': True}
         ]
 
-        super(AddGameContent, self).__init__(filled_field, caller, **kwargs)
+        super(AddGameContent, self).__init__(**kwargs)
 
 
 class AddRefereeContent(AddDataContent):
-    def __init__(self, filled_field, caller=None, **kwargs):
+    def __init__(self, **kwargs):
+
         self.data_table = "referee"
         self.items = [
             {'name': 'Second name', 'class': 'textfield', 'data_key': 'second_name', 'notnull': True,
@@ -425,11 +443,12 @@ class AddRefereeContent(AddDataContent):
              'data_table': 'category', 'data_key': 'category_id', 'drop_menu': True}
         ]
 
-        super(AddRefereeContent, self).__init__(filled_field, caller, **kwargs)
+        super(AddRefereeContent, self).__init__(**kwargs)
 
 
 class AddStadiumContent(AddDataContent):
-    def __init__(self, filled_field, caller=None, **kwargs):
+    def __init__(self, **kwargs):
+
         self.data_table = "stadium"
         self.items = [
             {'name': 'Name', 'class': 'textfield', 'data_key': 'name', 'notnull': True, 'add_text_in_parent': True},
@@ -438,49 +457,56 @@ class AddStadiumContent(AddDataContent):
             {'name': 'Address', 'class': 'textfield', 'data_key': 'address', 'notnull': True},
         ]
 
-        super(AddStadiumContent, self).__init__(filled_field, caller, **kwargs)
+        super(AddStadiumContent, self).__init__(**kwargs)
 
 
 class AddLeagueContent(AddDataContent):
-    def __init__(self, filled_field, caller=None, **kwargs):
+    def __init__(self, **kwargs):
+
         self.data_table = "league"
         self.items = [
             {'name': 'Name', 'class': 'textfield', 'data_key': 'name', 'notnull': True, 'add_text_in_parent': True}]
 
-        super(AddLeagueContent, self).__init__(filled_field, caller, **kwargs)
+        super(AddLeagueContent, self).__init__(**kwargs)
 
 
 class AddTeamContent(AddDataContent):
-    def __init__(self, filled_field, caller=None, **kwargs):
+    def __init__(self, **kwargs):
+
         self.data_table = "team"
         self.items = [
             {'name': 'Name', 'class': 'textfield', 'data_key': 'name', 'notnull': True, 'add_text_in_parent': True}]
 
-        super(AddTeamContent, self).__init__(filled_field, caller, **kwargs)
+        super(AddTeamContent, self).__init__(**kwargs)
 
 
 class AddCategoryContent(AddDataContent):
-    def __init__(self, filled_field, caller=None, **kwargs):
+    def __init__(self, **kwargs):
+
         self.data_table = "category"
         self.items = [
             {'name': 'Name', 'class': 'textfield', 'data_key': 'name', 'notnull': True, 'add_text_in_parent': True}]
 
-        super(AddCategoryContent, self).__init__(filled_field, caller, **kwargs)
+        super(AddCategoryContent, self).__init__(**kwargs)
 
 
 class AddCityContent(AddDataContent):
-    def __init__(self, filled_field, caller=None, **kwargs):
+    def __init__(self, **kwargs):
+
         self.data_table = "city"
         self.items = [
             {'name': 'Name', 'class': 'textfield', 'data_key': 'name', 'notnull': True, 'add_text_in_parent': True}]
 
-        super(AddCityContent, self).__init__(filled_field, caller, **kwargs)
+        super(AddCityContent, self).__init__(**kwargs)
 
 
 class TextField(MDTextField):
-    def __init__(self, parent, instr: dict, text: str, **kwargs):
+    def __init__(self, **kwargs):
+        self.parent_ = kwargs.pop('parent_')
+        text = kwargs.pop('text')
+        instr = kwargs.pop('instruction')
+
         super(TextField, self).__init__(**kwargs)
-        self.parent_ = parent
 
         self.set_text(self, text)
 
@@ -516,9 +542,6 @@ class TextField(MDTextField):
 
 
 class TFWithoutDrop(TextField):
-    def __init__(self, parent, instruction, text='', **kwargs):
-        super(TFWithoutDrop, self).__init__(parent, instruction, text, **kwargs)
-
     def on_text_validate(self):
         super(TextField, self).on_text_validate()
         self.change_focus = True
@@ -526,8 +549,8 @@ class TFWithoutDrop(TextField):
 
 
 class PhoneTF(TFWithoutDrop):
-    def __init__(self, parent, instruction, **kwargs):
-        super(PhoneTF, self).__init__(parent, instruction, **kwargs)
+    def __init__(self, **kwargs):
+        super(PhoneTF, self).__init__(**kwargs)
 
         self.helper_text = "X(XXX)XXX-XX-XX"
         self.helper_text_mode = "persistent"
@@ -579,8 +602,8 @@ class PhoneTF(TFWithoutDrop):
 
 
 class DateAndTimeTF(TFWithoutDrop):
-    def __init__(self, parent, instruction, **kwargs):
-        super(DateAndTimeTF, self).__init__(parent, instruction, **kwargs)
+    def __init__(self, **kwargs):
+        super(DateAndTimeTF, self).__init__(**kwargs)
 
         self.helper_text = "dd.mm.yyyy HH:MM"
         self.helper_text_mode = "persistent"
@@ -618,16 +641,13 @@ class DateAndTimeTF(TFWithoutDrop):
         super(DateAndTimeTF, self).on_text_validate()
 
 
-class AgeTF(TFWithoutDrop):
-    def __init__(self, parent, instruction, **kwargs):
-        super(AgeTF, self).__init__(parent, instruction, **kwargs)
-
+class YearTF(TFWithoutDrop):
     def insert_text(self, substring, from_undo=False):
         cursor = self.cursor_col
         substring = re.sub('[^0-9]', '', substring)
         if cursor > 3:
             substring = ''
-        return super(AgeTF, self).insert_text(substring, from_undo=from_undo)
+        return super(YearTF, self).insert_text(substring, from_undo=from_undo)
 
     def on_text_validate(self):
         pat = "^(19|20)[0-9]{2}$"
@@ -635,16 +655,16 @@ class AgeTF(TFWithoutDrop):
         if not re.match(pat, self.text):
             self.text = ""
 
-        super(AgeTF, self).on_text_validate()
+        super(YearTF, self).on_text_validate()
 
 
 class TFWithDrop(TextField):
-    def __init__(self, parent, instruction, text='', **kwargs):
-        super(TFWithDrop, self).__init__(parent, instruction, text, **kwargs)
+    def __init__(self, **kwargs):
+        super(TFWithDrop, self).__init__(**kwargs)
 
         self.have_drop_menu = True
 
-        self.drop_menu = DropMenu()  # header_cls=MenuHeader()
+        self.drop_menu = DropMenu()
 
     def add_item_in_text_input(self, text_item):
         self.text = text_item
@@ -734,7 +754,7 @@ class TFWithDrop(TextField):
 
     def _drop_menu_add_data(self, filled_fields=None):
         """Создает Dialog для добавления новых данных в БД."""
-        self.add_data_dialog = AddDataWindow(self.data_table, filled_field=filled_fields, caller=self)
+        self.add_data_dialog = AddDataWindow(type_=self.data_table, filled_field=filled_fields, caller_=self)
         self.add_data_dialog.open()
 
 
