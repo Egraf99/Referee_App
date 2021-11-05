@@ -1,4 +1,4 @@
-<GameScreen>:
+<AppScreen>:
     games_layout: games_layout
 
     MDBoxLayout:
@@ -6,6 +6,7 @@
         MDToolbar:
             title: 'App'
             type: 'top'
+            right_action_items: [["dots-vertical", lambda x: root.menu_settings()]]
 
         MDBottomNavigation:
             panel_color: .5, .5, .5, 1

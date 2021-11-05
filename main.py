@@ -33,7 +33,7 @@ def open_snackbar(text):
     Snackbar(text=text).open()
 
 
-class GameScreen(BoxLayout):
+class AppScreen(BoxLayout):
     games_layout = ObjectProperty()
 
     def __init__(self, **kwargs):
@@ -60,6 +60,9 @@ class GameScreen(BoxLayout):
         self.add_game_dialog = AddDataWindow(type_="games")
         self.add_game_dialog.open()
 
+    def menu_settings(self):
+        print("menu")
+
     def update_db(self, event) -> None:
         """Вызывается при нажатии на кнопку ADD."""
         self.add_game_dialog.content_cls.update_db()
@@ -70,7 +73,7 @@ class GameScreen(BoxLayout):
 
 
 class MatchTable(MDDataTable):
-    """Класс таблицы для игр."""
+    """Класс таблицы для отображения записанных в БД игр."""
 
     def __init__(self, **kwargs):
         self.elevation = 100
@@ -83,7 +86,8 @@ class MatchTable(MDDataTable):
                             ('Лига', self.cell_size),
                             ('Стадион', self.cell_size),
                             ('Хозяева', self.cell_size),
-                            ('Гости', self.cell_size)]
+                            ('Гости', self.cell_size),
+                            ('Статус', self.cell_size)]
 
         self.row_data = self._take_games()
         super(MatchTable, self).__init__(**kwargs)
@@ -92,19 +96,63 @@ class MatchTable(MDDataTable):
         """Обновляет таблицу"""
         self.row_data = self._take_games()
 
-    def _take_games(self) -> list:
-        """Возвращает преобразованные в табличные значения данные из БД."""
+    @staticmethod
+    def _take_games() -> list:
+        """Возвращает преобразованные в табличные значения данные из БД.
+
+            Return:
+                list_of_games(list) - список игр, взятых из БД."""
+
         games = DB.take_games()
         list_of_games = []
         for game_info in games:
-            league, date, time_, stadium, team_home, team_guest = game_info[:6]
+            game = Game(*game_info)
 
-            date = self._date_list_in_str(date.split())
-            time_ = self._time_int_in_str(time_)
-
-            list_of_games.append([date, time_, league, stadium, team_home, team_guest])
+            list_of_games.append([game.date, game.time, game.league, game.stadium, game.team_home, game.team_guest, game.status])
 
         return list_of_games
+
+
+class Game:
+    """Класс, определяющий игру из БД."""
+
+    def __init__(self, id_in_db: int, league: str, year: int, month: int, day: int, time_: int,
+                 stadium: str, team_home: str, team_guest: str,
+                 game_passed: Optional[int], pay_done: Optional[int], payment: int):
+        self.id_in_db = id_in_db
+        self.league = league
+        self.date = self._date_list_in_str(year, month, day)
+        self.time = self._time_int_in_str(time_)
+        self.stadium = stadium
+        self.team_home = team_home
+        self.team_guest = team_guest
+        self.referee_chief = self._take_referee("chief").strip()
+        self.referee_first = self._take_referee("first").strip()
+        self.referee_second = self._take_referee("second").strip()
+        self.referee_reserve = self._take_referee("reserve")
+        self.game_passed = bool(game_passed)
+        self.pay_done = bool(pay_done)
+        self.payment = payment
+        self.status = self._get_status(self.game_passed, self.pay_done)
+
+    def _take_referee(self, position: str) -> str:
+        """Возвращает ФИО судьи из БД.
+
+            Parameters:
+                position(str) - позиция судьи, может быть [chief, first, second, reserve].
+
+            Return:
+                name(str) - имя (если есть), фамилия (если есть), отчество (если есть) судьи."""
+
+        table = f"games INNER JOIN referee ON games.referee_{position} = referee.id"
+        first_name = DB.take_data("referee.first_name", table, conditions={"games.id": self.id_in_db}, one_value=True)
+        second_name = DB.take_data("referee.second_name", table, conditions={"games.id": self.id_in_db}, one_value=True)
+        third_name = DB.take_data("referee.third_name", table, conditions={"games.id": self.id_in_db}, one_value=True)
+
+        name = [f"{name[0]} " if name and name[0] else '' for name in [first_name, second_name, third_name]]
+        name = "".join(name)
+
+        return name
 
     def _time_int_in_str(self, time_: int) -> str:
         """Преобразует значние времени взятое из базы данных в виде 4-х целых чисел в формат HH:MM."""
@@ -115,14 +163,32 @@ class MatchTable(MDDataTable):
 
         return f'{hour}:{minute}'
 
-    def _date_list_in_str(self, date: list) -> str:
-        """Преобразует значние даты взятое из базы данных в виде 4-х целых чисел в формат DD.MM.YYYY."""
-        year, month, day = date
-
+    def _date_list_in_str(self, year: int, month: int, day: int) -> str:
+        """Преобразует значние года, месяца и года в формат DD.MM.YYYY."""
         day = self._change_if_less_ten(day)
         month = self._change_if_less_ten(month)
 
         return f'{day}.{month}.{year}'
+
+    @staticmethod
+    def _get_status(game_passed: bool, pay_done: bool) -> str:
+        """Возвращает статус игры от переданных условий (проведена и оплачена ли игра).
+
+            Parameters:
+                game_passed(bool) - (не) прошла игра.
+                pay_done(bool) - (не) оплачена игра.
+
+            Return:
+                status(str) - текущий статус игры."""
+
+        if game_passed and pay_done:
+            return "Оплачено"
+        elif game_passed and not pay_done:
+            return "Проведена"
+        elif not game_passed and pay_done:
+            return "Не проведена"
+        elif not game_passed and not pay_done:
+            return "Не проведена"
 
     @staticmethod
     def _change_if_less_ten(number):
@@ -133,7 +199,7 @@ class MatchTable(MDDataTable):
         return number
 
 
-def take_name(table: str) -> list:
+def take_name_from_db(table: str) -> list:
     """Возвращает значение из БД с помощью функций класса DB.
 
     Parameters:
@@ -151,7 +217,7 @@ def take_name(table: str) -> list:
         return data
 
     except AttributeError:
-        raise AttributeError(f"n ConnDB has no table '{table}'")
+        raise AttributeError(f"ConnDB has no table '{table}'")
 
 
 class DropMenu(MDDropdownMenu):
@@ -193,6 +259,8 @@ class AddDataWindow(MDDialog):
         type_ = kwargs.pop('type_')
         assert type_ in ["games", "referee", "stadium", "league", "category", "city", "team"], '\
                     parameter type_ must be in ["games", "referee", "stadium", "league", "category", "city", "team"]'
+
+        self.caller_ = None
 
         title = " ".join(['Add', type_])
 
@@ -367,7 +435,7 @@ class AddDataContent(RecycleView):
 
         if not self.caller_:
             open_dialog("Successfully added")
-            main.game_screen.table_games.update()
+            main.app_screen.table_games.update()
 
         else:
             self.caller_.text = caller_field_text.strip()
@@ -678,7 +746,7 @@ class TFWithDrop(TextField):
         self.drop_menu.caller = self
 
         # берем текст вызывающего поля ввода для определения строк в всплывающем меню
-        items = take_name(self.data_table)
+        items = take_name_from_db(self.data_table)
         self.drop_menu.set_items(self, [i[0] for i in items])
 
         if items:
@@ -707,7 +775,7 @@ class TFWithDrop(TextField):
         matching_items = []
 
         # берем текст вызывающего поля ввода для определения строк в всплывающем меню
-        items = take_name(self.data_table)
+        items = take_name_from_db(self.data_table)
 
         for item in items:
             if self.text.lower() in item[0].lower():
@@ -717,7 +785,7 @@ class TFWithDrop(TextField):
         self.drop_menu.update()
 
     def on_text_validate(self):
-        """При нажатии кнопки Enter вводит текст выбранного item в строку или открывает меню добавления, если item'ов
+        """При нажатии кнопки Enter вводит текст первого item в строку или открывает меню добавления, если item'ов
         нет."""
         text_dropmenu = self.drop_menu.items[0]["text"]
 
@@ -763,9 +831,9 @@ class MainApp(MDApp):
         self.theme_cls.primary_palette = "Gray"
         self.theme_cls.theme_style = "Dark"
 
-        self.game_screen = GameScreen()
+        self.app_screen = AppScreen()
 
-        return self.game_screen
+        return self.app_screen
 
 
 if __name__ == "__main__":

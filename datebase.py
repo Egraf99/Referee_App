@@ -4,8 +4,9 @@ from typing import Optional
 
 class ConnDB:
     def take_games(self) -> list:
-        sql = '''SELECT league.name, year||' '||month||' '||day AS date,
-                        time, stadium.name, th.name, tg.name
+        sql = '''SELECT games.id, league.name, year, month, day,
+                        time, stadium.name, th.name, tg.name,
+                        game_passed, pay_done, payment
                    FROM Games 
                         INNER JOIN League ON Games.league_id = League.id
                         INNER JOIN Stadium ON Games.stadium_id = Stadium.id
@@ -33,6 +34,7 @@ class ConnDB:
         else:
             sql = f'''SELECT {what_return} FROM {table}'''
 
+        # print(sql, values)
         return self.select_request(sql, values, one_value=one_value)
 
     def insert(self, table: str, data: dict) -> None:
