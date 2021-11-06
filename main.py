@@ -1,5 +1,6 @@
 import re
-from typing import Optional, Any
+from typing import Optional, Any, Union
+
 from kivy.uix.widget import WidgetException
 from kivymd.uix.snackbar import Snackbar
 from kivy.clock import Clock
@@ -108,7 +109,8 @@ class MatchTable(MDDataTable):
         for game_info in games:
             game = Game(*game_info)
 
-            list_of_games.append([game.date, game.time, game.league, game.stadium, game.team_home, game.team_guest, game.status])
+            list_of_games.append([game.date, game.time, game.league, game.stadium,
+                                  game.team_home, game.team_guest, game.status])
 
         return list_of_games
 
@@ -171,7 +173,7 @@ class Game:
         return f'{day}.{month}.{year}'
 
     @staticmethod
-    def _get_status(game_passed: bool, pay_done: bool) -> str:
+    def _get_status(game_passed: bool, pay_done: bool) -> Union[str, tuple]:
         """Возвращает статус игры от переданных условий (проведена и оплачена ли игра).
 
             Parameters:
@@ -182,13 +184,14 @@ class Game:
                 status(str) - текущий статус игры."""
 
         if game_passed and pay_done:
-            return "Оплачено"
+            return ("checkbox-marked-circle", [52 / 256, 165 / 256, 0, 1], "Оплачено")
         elif game_passed and not pay_done:
-            return "Проведена"
+            return ("alert", [255 / 256, 165 / 256, 0, 1], "Проведена")
         elif not game_passed and pay_done:
             return "Не проведена"
         elif not game_passed and not pay_done:
-            return "Не проведена"
+            return ("checkbox-marked-circle", [52 / 256, 165 / 256, 0, 1], "Оплачено")
+            # return "Не проведена"
 
     @staticmethod
     def _change_if_less_ten(number):
