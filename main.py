@@ -216,6 +216,7 @@ class Game:
         elif not game_passed:
             return "not_passed"
 
+
     @staticmethod
     def _change_if_less_ten(number):
         """Преобразует значение меньше 10 в формат 0_."""
