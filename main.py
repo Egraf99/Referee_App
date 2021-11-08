@@ -10,6 +10,7 @@ from kivy.uix.scrollview import ScrollView
 from kivy.properties import ObjectProperty
 from kivy.metrics import dp
 
+from kivymd.color_definitions import colors
 from kivymd.uix.boxlayout import MDBoxLayout
 from kivymd.uix.card import MDCard
 from kivymd.uix.datatables import MDDataTable
@@ -42,7 +43,7 @@ class AppScreen(BoxLayout):
 
         self.add_game_dialog = ObjectProperty()
 
-        self.table_games = MatchTable()
+        self.table_games = GamesTable()
 
         # при первом включении необходимо показать контент
         self._create_main_page()
@@ -54,9 +55,9 @@ class AppScreen(BoxLayout):
     def add_button_callback(self) -> None:
         """Вызывается при нажатии на MDFloatingActionButton.
          Открывает окно добавления новой игры."""
-        self.pop_dialog_add_match()
+        self.pop_dialog_add_game()
 
-    def pop_dialog_add_match(self) -> None:
+    def pop_dialog_add_game(self) -> None:
         """Открывает Dialog для добавления новой игры."""
         self.add_game_dialog = AddDataWindow(type_="games")
         self.add_game_dialog.open()
@@ -73,50 +74,74 @@ class AppScreen(BoxLayout):
         self.add_game_dialog.dismiss()
 
 
-class MatchTable(MDDataTable):
+class GamesTable(MDDataTable):
     """Класс таблицы для отображения записанных в БД игр."""
 
     def __init__(self, **kwargs):
+        self.cell_size = dp(25)
+        # ключи showed_data должны совпадать с именами атрибутов класса Game
+        data_dict = {"date": ('Дата', dp(20)),
+                     "time": ('Время', dp(12)),
+                     "league": ('Лига', self.cell_size),
+                     "stadium": ('Стадион', self.cell_size),
+                     "team_home": ('Хозяева', self.cell_size),
+                     "team_guest": ('Гости', self.cell_size),
+                     "status": ('Статус', dp(30))}
+
+        self.showed_data = ["date", "time", "stadium", "status"]
+
+        # проверка, если в будущем будет несколько таблиц с заданными показываемыми значениями
+        # значения showed_data должны состоять из ключей data_dict
+        assert all(map(lambda data: data_dict.get(data), self.showed_data)), "" \
+                    'showed_data might be in ["date", "time", "league", "stadium", "team_home", "team_guest", "status"]'
+
         self.elevation = 100
         self.rows_num = 10
-        self.cell_size = dp(25)
         self.use_pagination = False
         self.check = False
-        self.column_data = [('Дата', dp(20)),
-                            ('Время', dp(12)),
-                            ('Лига', self.cell_size),
-                            ('Стадион', self.cell_size),
-                            ('Хозяева', self.cell_size),
-                            ('Гости', self.cell_size),
-                            ('Статус', self.cell_size)]
+        self.column_data = list(map(lambda data: data_dict.get(data), self.showed_data))
 
         self.row_data = self._take_games()
-        super(MatchTable, self).__init__(**kwargs)
+        super(GamesTable, self).__init__(**kwargs)
+
+        self.count_cell_in_row = len(self.column_data)
 
     def update(self):
         """Обновляет таблицу"""
         self.row_data = self._take_games()
 
-    @staticmethod
-    def _take_games() -> list:
+    def on_row_press(self, instance_cell_row):
+        # трока, в которой находится нажатая клетка
+        row_cell = instance_cell_row.index // self.count_cell_in_row
+
+        # игра, записанная в данной строке
+        game = self.list_of_games[row_cell]
+        print(game.status_key)
+
+    def _take_games(self) -> list:
         """Возвращает преобразованные в табличные значения данные из БД.
 
             Return:
                 list_of_games(list) - список игр, взятых из БД."""
 
         games = DB.take_games()
-        list_of_games = []
+        self.list_of_games = []
+        return_list = []
         for game_info in games:
             game = Game(*game_info)
 
-            list_of_games.append([game.date, game.time, game.league, game.stadium,
-                                  game.team_home, game.team_guest, game.status])
+            self.list_of_games.append(game)
+            return_list.append(list(map(lambda data: getattr(game, data), self.showed_data)))
 
-        return list_of_games
+        return return_list
 
 
 class Game:
     """Класс, определяющий игру из БД."""
+    # dict of status icon, color, name
+    status_icn = {"not_passed": ("calendar-alert", colors["Yellow"]["800"], "Не проведена"),
+                  "passed": ("calendar-check", colors["Green"]["300"], "Проведена"),
+                  "pay_done": ("calendar-check", colors["Green"]["500"], "Оплачено")}
 
     def __init__(self, id_in_db: int, league: str, year: int, month: int, day: int, time_: int,
                  stadium: str, team_home: str, team_guest: str,
@@ -135,7 +160,8 @@ class Game:
         self.game_passed = bool(game_passed)
         self.pay_done = bool(pay_done)
         self.payment = payment
-        self.status = self._get_status(self.game_passed, self.pay_done)
+        self.status_key = self._get_status(self.game_passed, self.pay_done)
+        self.status = self.status_icn[self.status_key]
 
     def _take_referee(self, position: str) -> str:
         """Возвращает ФИО судьи из БД.
@@ -184,14 +210,11 @@ class Game:
                 status(str) - текущий статус игры."""
 
         if game_passed and pay_done:
-            return ("checkbox-marked-circle", [52 / 256, 165 / 256, 0, 1], "Оплачено")
+            return "pay_done"
         elif game_passed and not pay_done:
-            return ("alert", [255 / 256, 165 / 256, 0, 1], "Проведена")
-        elif not game_passed and pay_done:
-            return "Не проведена"
-        elif not game_passed and not pay_done:
-            return ("checkbox-marked-circle", [52 / 256, 165 / 256, 0, 1], "Оплачено")
-            # return "Не проведена"
+            return "passed"
+        elif not game_passed:
+            return "not_passed"
 
     @staticmethod
     def _change_if_less_ten(number):
@@ -248,7 +271,7 @@ class DropMenu(MDDropdownMenu):
             self.open()
 
 
-def _clear_kwargs(kwargs: dict, keys: list[str]) -> dict:
+def _clear_kwargs(kwargs: dict, keys: list) -> dict:
     for key in keys:
         kwargs.pop(key, None)
     return kwargs
@@ -328,9 +351,8 @@ class AddDataContent(RecycleView):
                                                                                     в новом горизонтальном BoxLayout.
                   Ширина отдельного объекта зависит от значения 'size_hint_x' в словаре.
 
-            box (BoxLayout)- контейнер для добавления объектов.
-            filled_field (dict)- словарь, где ключи соответствуют названиям полей, а
-                                              значения - текстом, которым их надо заполнять."""
+            box (BoxLayout)- контейнер для добавления объектов."""
+
         for item in items:
             if type(item) == list:
                 hor_box = MDBoxLayout(orientation="horizontal", spacing=dp(10), adaptive_height=True)
@@ -464,23 +486,25 @@ class AddDataContent(RecycleView):
 
 class AddGameContent(AddDataContent):
     def __init__(self, **kwargs):
-
         self.data_table = "games"
         self.items = [
             {'name': 'Stadium', 'class': 'textfield', 'what_fields_child_fill': ['name'],
              'data_table': 'stadium', 'data_key': 'stadium_id', 'drop_menu': True, 'notnull': True},
-            {'name': 'Data and Time', 'class': 'textfield', 'type': 'date_and_time', 'data_key': 'date_and_time', 'notnull': True},
+            {'name': 'Data and Time', 'class': 'textfield', 'type': 'date_and_time', 'data_key': 'date_and_time',
+             'notnull': True},
             {'name': 'League', 'class': 'textfield', 'what_fields_child_fill': ['name'],
              'data_table': 'league', 'data_key': 'league_id', 'drop_menu': True, 'notnull': True},
             [
                 {'name': 'Home team', 'class': 'textfield', 'what_fields_child_fill': ['name'],
                  'data_table': 'team', 'data_key': 'team_home', 'drop_menu': True, 'notnull': True},
-                {'name': 'Year home team', 'class': 'textfield', 'type': 'age', 'data_key': 'team_home_year', 'size_hint_x': 0.35}
+                {'name': 'Year home team', 'class': 'textfield', 'type': 'age', 'data_key': 'team_home_year',
+                 'size_hint_x': 0.35}
             ],
             [
                 {'name': 'Guest team', 'class': 'textfield', 'what_fields_child_fill': ['name'],
-             'data_table': 'team', 'data_key': 'team_guest', 'drop_menu': True, 'notnull': True},
-                {'name': 'Year guest team', 'class': 'textfield', 'type': 'age', 'data_key': 'team_guest_year', 'size_hint_x': 0.35}
+                 'data_table': 'team', 'data_key': 'team_guest', 'drop_menu': True, 'notnull': True},
+                {'name': 'Year guest team', 'class': 'textfield', 'type': 'age', 'data_key': 'team_guest_year',
+                 'size_hint_x': 0.35}
             ],
             {'name': 'Chief referee', 'class': 'textfield',
              'what_fields_child_fill': ['second_name', 'first_name', 'third_name'],
@@ -501,7 +525,6 @@ class AddGameContent(AddDataContent):
 
 class AddRefereeContent(AddDataContent):
     def __init__(self, **kwargs):
-
         self.data_table = "referee"
         self.items = [
             {'name': 'Second name', 'class': 'textfield', 'data_key': 'second_name', 'notnull': True,
@@ -519,7 +542,6 @@ class AddRefereeContent(AddDataContent):
 
 class AddStadiumContent(AddDataContent):
     def __init__(self, **kwargs):
-
         self.data_table = "stadium"
         self.items = [
             {'name': 'Name', 'class': 'textfield', 'data_key': 'name', 'notnull': True, 'add_text_in_parent': True},
@@ -533,7 +555,6 @@ class AddStadiumContent(AddDataContent):
 
 class AddLeagueContent(AddDataContent):
     def __init__(self, **kwargs):
-
         self.data_table = "league"
         self.items = [
             {'name': 'Name', 'class': 'textfield', 'data_key': 'name', 'notnull': True, 'add_text_in_parent': True}]
@@ -543,7 +564,6 @@ class AddLeagueContent(AddDataContent):
 
 class AddTeamContent(AddDataContent):
     def __init__(self, **kwargs):
-
         self.data_table = "team"
         self.items = [
             {'name': 'Name', 'class': 'textfield', 'data_key': 'name', 'notnull': True, 'add_text_in_parent': True}]
@@ -553,7 +573,6 @@ class AddTeamContent(AddDataContent):
 
 class AddCategoryContent(AddDataContent):
     def __init__(self, **kwargs):
-
         self.data_table = "category"
         self.items = [
             {'name': 'Name', 'class': 'textfield', 'data_key': 'name', 'notnull': True, 'add_text_in_parent': True}]
@@ -563,7 +582,6 @@ class AddCategoryContent(AddDataContent):
 
 class AddCityContent(AddDataContent):
     def __init__(self, **kwargs):
-
         self.data_table = "city"
         self.items = [
             {'name': 'Name', 'class': 'textfield', 'data_key': 'name', 'notnull': True, 'add_text_in_parent': True}]
