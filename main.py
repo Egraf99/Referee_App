@@ -1,11 +1,12 @@
 import re
-from typing import Optional, Any, Union
+from typing import Optional, Any, Union, List, Tuple
 
 from kivy.uix.widget import WidgetException
 from kivymd.uix.snackbar import Snackbar
 from kivy.clock import Clock
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.layout import Layout
+from kivy.uix.checkbox import CheckBox
 from kivy.uix.scrollview import ScrollView
 from kivy.properties import ObjectProperty
 from kivy.metrics import dp
@@ -17,6 +18,7 @@ from kivymd.uix.datatables import MDDataTable
 from kivymd.uix.dialog import MDDialog
 from kivymd.uix.button import MDFlatButton, MDFloatingActionButton
 from kivymd.uix.textfield import MDTextField
+from kivy.uix.label import Label
 from kivymd.uix.list import OneLineAvatarIconListItem, OneLineIconListItem
 from kivymd.uix.snackbar import Snackbar
 from kivy.uix.behaviors.focus import FocusBehavior
@@ -77,34 +79,50 @@ class AppScreen(BoxLayout):
 class GamesTable(MDDataTable):
     """Класс таблицы для отображения записанных в БД игр."""
 
-    def __init__(self, **kwargs):
+    def __init__(self):
         self.cell_size = dp(25)
         # ключи showed_data должны совпадать с именами атрибутов класса Game
-        data_dict = {"date": ('Дата', dp(20)),
-                     "time": ('Время', dp(12)),
-                     "league": ('Лига', self.cell_size),
-                     "stadium": ('Стадион', self.cell_size),
-                     "team_home": ('Хозяева', self.cell_size),
-                     "team_guest": ('Гости', self.cell_size),
-                     "status": ('Статус', dp(30))}
+        self.data_dict = {"date": ('Дата', dp(20)),
+                          "time": ('Время', dp(12)),
+                          "league": ('Лига', ),
+                          "stadium": ('Стадион',),
+                          "team_home": ('Хозяева',),
+                          "team_guest": ('Гости',),
+                          "status": ('Статус', dp(30))}
 
-        self.showed_data = ["date", "time", "stadium", "status"]
+        self.showed_data = ["date", "time", "stadium", "status", "referee_chief"]
 
         # проверка, если в будущем будет несколько таблиц с заданными показываемыми значениями
         # значения showed_data должны состоять из ключей data_dict
-        assert all(map(lambda data: data_dict.get(data), self.showed_data)), "" \
-                    'showed_data might be in ["date", "time", "league", "stadium", "team_home", "team_guest", "status"]'
+        assert all(map(lambda data: data in Game.attribute, self.showed_data)), "" \
+                                                                            f"showed_data might be in {Game.attribute}"
 
         self.elevation = 100
         self.rows_num = 10
         self.use_pagination = False
         self.check = False
-        self.column_data = list(map(lambda data: data_dict.get(data), self.showed_data))
+        self.column_data = list(map(lambda data: self._set_column_name_and_size(data), self.showed_data))
 
         self.row_data = self._take_games()
-        super(GamesTable, self).__init__(**kwargs)
+        super(GamesTable, self).__init__()
 
         self.count_cell_in_row = len(self.column_data)
+
+    def _set_column_name_and_size(self, data: str):
+        if data in self.data_dict:
+            data_dict = self.data_dict[data]
+            if len(data_dict) == 1:
+                name = self.data_dict.get(data)[0]
+                cell_size = self.cell_size
+            elif len(data_dict) == 2:
+                name, cell_size = self.data_dict.get(data)
+            else:
+                raise IndexError("len(item) in data_dict should be 1 or 2")
+
+        else:
+            name, cell_size = data, self.cell_size
+
+        return name, cell_size
 
     def update(self):
         """Обновляет таблицу"""
@@ -142,6 +160,19 @@ class Game:
     status_icn = {"not_passed": ("calendar-alert", colors["Yellow"]["800"], "Не проведена"),
                   "passed": ("calendar-check", colors["Green"]["300"], "Проведена"),
                   "pay_done": ("calendar-check", colors["Green"]["500"], "Оплачено")}
+    # list future attribute
+    attribute = ["id_in_db",
+                 "league", "date", "time", "stadium",
+                 "team_home",
+                 "team_guest",
+                 "referee_chief",
+                 "referee_first",
+                 "referee_second",
+                 "referee_reserve", "game_passed",
+                 "pay_done",
+                 "payment",
+                 "status",
+                 ]
 
     def __init__(self, id_in_db: int, league: str, year: int, month: int, day: int, time_: int,
                  stadium: str, team_home: str, team_guest: str,
@@ -216,7 +247,6 @@ class Game:
         elif not game_passed:
             return "not_passed"
 
-
     @staticmethod
     def _change_if_less_ten(number):
         """Преобразует значение меньше 10 в формат 0_."""
@@ -248,11 +278,11 @@ def take_name_from_db(table: str) -> list:
 
 
 class DropMenu(MDDropdownMenu):
-    def __init__(self, **kwargs):
+    def __init__(self):
         self.width_mult = dp(4)
         self.max_height = dp(250)
 
-        super(DropMenu, self).__init__(**kwargs)
+        super(DropMenu, self).__init__()
 
     def set_items(self, text_list, list_items: list, added_item=None):
         """Добавляет items в DropMenu."""
@@ -264,18 +294,12 @@ class DropMenu(MDDropdownMenu):
         else:
             self.items = [{"text": f'Add "{added_item}" in base',
                            "viewclass": "OneLineListItem",
-                           "on_release": lambda: text_list._drop_menu_add_data_and_close()}]
+                           "on_release": lambda: text_list.drop_menu_add_data_and_close()}]
 
     def update(self):
         self.set_menu_properties()
         if not self.parent:
             self.open()
-
-
-def _clear_kwargs(kwargs: dict, keys: list) -> dict:
-    for key in keys:
-        kwargs.pop(key, None)
-    return kwargs
 
 
 class AddDataWindow(MDDialog):
@@ -298,8 +322,7 @@ class AddDataWindow(MDDialog):
         self.buttons = [MDFlatButton(text="CANCEL", on_release=self.dismiss),
                         MDFlatButton(text="ADD", on_release=self._add_button_click)]
 
-        kwargs = _clear_kwargs(kwargs, ['filled_field', 'caller_'])
-        super(AddDataWindow, self).__init__(**kwargs)
+        super(AddDataWindow, self).__init__()
 
     def _set_content_cls(self, type_, **kwargs) -> None:
         if type_ == "games":
@@ -340,8 +363,6 @@ class AddDataContent(RecycleView):
         self.children_ = []
         self._add_items_in_box(self.items, self.ids.box)
 
-        # Clock.schedule_once(self.set_focus, .5)
-
     def _add_items_in_box(self, items: list, box: Layout):
         """Добавляет items в главный BoxLayout.
 
@@ -356,37 +377,46 @@ class AddDataContent(RecycleView):
 
         for item in items:
             if type(item) == list:
-                hor_box = MDBoxLayout(orientation="horizontal", spacing=dp(10), adaptive_height=True)
+                hor_box = MDBoxLayout(orientation="horizontal", spacing=dp(10))
                 box.add_widget(hor_box)
                 self._add_items_in_box(item, hor_box)
 
             elif type(item) == dict:
-                # заполняет уже имеющиеся данные в строке, если есть
-                text = self.filled_field.pop(item['data_key'], '')
                 class_ = item.setdefault('class', '')
                 type_ = item.setdefault('type', '')
 
                 if class_ == "textfield":
+                    # заполняет уже имеющиеся данные в строке, если есть
+                    text = self.filled_field.pop(item['data_key'], '')
+
                     self._add_textfield(type_, item, text, box)
-                elif class_ == "checkbutton":
-                    self._add_checkbutton()
+                elif class_ == "checkbox":
+                    self._add_checkbutton(item, box)
+                elif class_ == "label":
+                    self._add_label(item, box)
 
     def _add_textfield(self, type_, instr, text, box):
-        size_hint_x = instr.setdefault('size_hint_x', 1)
-
         if type_ == 'date_and_time':
-            self._add_widget(DateAndTimeTF(parent_=self, instruction=instr, text=text, size_hint_x=size_hint_x), box)
+            self._add_widget(DateAndTimeTF(parent_=self, instruction=instr, text=text), box)
         elif type_ == 'phone':
-            self._add_widget(PhoneTF(parent_=self, instruction=instr, text=text, size_hint_x=size_hint_x), box)
+            self._add_widget(PhoneTF(parent_=self, instruction=instr, text=text), box)
         elif type_ == 'age':
-            self._add_widget(YearTF(parent_=self, instruction=instr, text=text, size_hint_x=size_hint_x), box)
+            self._add_widget(YearTF(parent_=self, instruction=instr, text=text), box)
+        elif type_ == 'payment':
+            self._add_widget(PaymentTF(parent_=self, instruction=instr, text=text), box)
         elif instr.setdefault('drop_menu', False):
-            self._add_widget(TFWithDrop(parent_=self, instruction=instr, text=text, size_hint_x=size_hint_x), box)
+            self._add_widget(TFWithDrop(parent_=self, instruction=instr, text=text), box)
         else:
-            self._add_widget(TFWithoutDrop(parent_=self, instruction=instr, text=text, size_hint_x=size_hint_x), box)
+            self._add_widget(TFWithoutDrop(parent_=self, instruction=instr, text=text), box)
 
-    def _add_checkbutton(self):
-        pass
+    def _add_checkbutton(self, instr: dict, box: Layout):
+        self._add_widget(GamePassedCheck(instruction=instr), box)
+
+    def _add_label(self, instr: dict, box: Layout):
+        size_hint_x = instr.setdefault('size_hint_x', 1)
+        text = instr.setdefault('text', '')
+
+        self._add_widget(Label(text=text, size_hint_x=size_hint_x), box)
 
     def _add_widget(self, widget, box: Layout):
         box.add_widget(widget)
@@ -412,44 +442,31 @@ class AddDataContent(RecycleView):
         height = len(self.items) * 62
         return dp(height)
 
-    def update_db(self):
-        """Обрабатывает полученные из полей данные и отправляет на обновление БД."""
-        fields = self.children_
+    def update_db(self) -> bool:
+        """Обрабатывает полученные из полей данные и отправляет на обновление БД.
+
+            Return:
+                success(bool) - успех добавления в БД."""
+
+        children = self.children_
 
         not_fill_fields = []
         caller_field_text = ""
         data = {}
 
-        for field in fields:
-            if field.add_text_in_parent:
-                # запоминаем текст из полей, данные из которых будут записаны в вызывающем поле
-                caller_field_text = " ".join([caller_field_text, field.text])
+        for child in children:
+            if isinstance(child, TextField):
+                data_, cft, required_not_fill = self._check_text_field(child)
+                data.update(data_)
+                if cft:
+                    caller_field_text = " ".join([caller_field_text, cft])
+                if required_not_fill:
+                    not_fill_fields.append(child.hint_text)
 
-            if field.required and not field.text:  # ищем необходимые не заполненные поля
-                not_fill_fields.append(field.hint_text)
-            elif field.text and field.have_drop_menu:  # поле, имеющее всплывающее окно записываются в БД через id
-                # если полей заполнения несколько, разбиваем строку по пробелу
-                all_conditions = field.text.split(' ') if len(field.what_fields_child_fill) > 1 else [field.text]
-                conditions_dict = {}
+            elif isinstance(child, CheckBox):
+                data.update(self._check_checkbox(child))
 
-                # составляем словарь, где ключ - поле в БД, по которому искать, значение - фильтрующее значение
-                for inx, condition in enumerate(all_conditions):
-                    try:
-                        conditions_dict[field.what_fields_child_fill[inx]] = condition
-                    except IndexError:
-                        continue
-
-                # запрашиваем id исходя из условий
-                try:
-                    id_ = DB.take_data("id", field.data_table, conditions_dict, one_value=True)[0]
-                    data[field.data_key] = id_
-                except TypeError:
-                    open_dialog(f'Name "{field.text}" is not found in the table {field.data_table.capitalize()}')
-
-            elif field.text:  # поля не пустые, текст из которых прямо идет в БД
-                data[field.data_key] = field.text
-
-        if not_fill_fields:  # если есть незаполненные поля вызываем подсказку и возвращаем неуспех
+        if not_fill_fields:  # если есть незаполненные необходимые поля вызывает подсказку и возвращает неуспех
             not_filled = "\n".join(f"   - {text}" for text in not_fill_fields)
             open_dialog(f"The fields:\n{not_filled}\n is not filled on")
             return False
@@ -468,6 +485,69 @@ class AddDataContent(RecycleView):
             open_snackbar(f"{self.caller_.name.title()} {self.caller_.text} successfully added")
 
         return True
+
+    @staticmethod
+    def _check_text_field(field) -> Tuple[dict, Optional[str], bool]:
+        """Анализирует field и возвращает его данные.
+
+            Parameter:
+                field(TextField) - проверяемое поле.
+
+            Return:
+                data(dict) - словарь, где ключ - поле в БД, куда записываются данные с данного field,
+                                        а значение - записываемые данные.
+                caller_field_text(str) - строка, отображающая текст,
+                                        который будет записан из этого field в родительское field.
+                required_not_fill(bool) - заполненно ли field (только если field обязательно заполняется)."""
+
+        data = {}
+        caller_field_text = None
+        required_not_fill = False
+
+        if field.add_text_in_parent:
+            # запоминает текст из полей, данные из которых будут записаны в вызывающем поле
+            caller_field_text = field.text
+
+        if field.required and not field.text:  # ищет необходимые не заполненные поля
+            required_not_fill = True
+
+        elif field.text and field.have_drop_menu:  # поле, имеющее всплывающее окно записываются в БД через id
+            # если полей заполнения несколько, разбивает строку по пробелу
+            all_conditions = field.text.split(' ') if len(field.what_fields_child_fill) > 1 else [field.text]
+            conditions_dict = {}
+
+            # составляет словарь, где ключ - поле в БД, по которому искать, значение - фильтрующее значение
+            for inx, condition in enumerate(all_conditions):
+                try:
+                    conditions_dict[field.what_fields_child_fill[inx]] = condition
+                except IndexError:
+                    continue
+
+            # запрашивает id исходя из условий
+            try:
+                id_ = DB.take_data("id", field.data_table, conditions_dict, one_value=True)[0]
+                data[field.data_key] = id_
+            except TypeError:
+                open_dialog(f'Name "{field.text}" is not found in the table {field.data_table.capitalize()}')
+
+        elif field.text:  # поля не пустые, текст из которых прямо идет в БД
+            data[field.data_key] = field.text
+
+        return data, caller_field_text, required_not_fill
+
+    @staticmethod
+    def _check_checkbox(checkbox) -> dict:
+        """Анализирует checkbox и возвращает его данные.
+
+                    Parameter:
+                        checkbox(CheckBox) - проверяемый checkbox.
+
+                    Return:
+                        data(dict) - словарь, где ключ - поле в БД, куда булевое значение checkbox.active."""
+
+        data = 1 if checkbox.active else 0
+
+        return {checkbox.data_key: data}
 
     def set_next_focus(self, previous_widget):
         """Устанавливает фокус на слудующем виджете, если он не заполнен."""
@@ -489,6 +569,11 @@ class AddGameContent(AddDataContent):
     def __init__(self, **kwargs):
         self.data_table = "games"
         self.items = [
+            [
+                {'class': 'checkbox', 'data_key': 'game_passed', 'size_hint_x': 0.1},
+                {'class': 'label', 'text': 'Game passed', 'size_hint_x': 0.2},
+                {'class': 'textfield', 'type': 'payment', 'name': 'Payment', 'data_key': 'payment', 'size_hint_x': 0.5}
+            ],
             {'name': 'Stadium', 'class': 'textfield', 'what_fields_child_fill': ['name'],
              'data_table': 'stadium', 'data_key': 'stadium_id', 'drop_menu': True, 'notnull': True},
             {'name': 'Data and Time', 'class': 'textfield', 'type': 'date_and_time', 'data_key': 'date_and_time',
@@ -595,8 +680,9 @@ class TextField(MDTextField):
         self.parent_ = kwargs.pop('parent_')
         text = kwargs.pop('text')
         instr = kwargs.pop('instruction')
+        self.size_hint_x = instr.setdefault('size_hint_x', 1)
 
-        super(TextField, self).__init__(**kwargs)
+        super(TextField, self).__init__()
 
         self.set_text(self, text)
 
@@ -748,6 +834,20 @@ class YearTF(TFWithoutDrop):
         super(YearTF, self).on_text_validate()
 
 
+class PaymentTF(TFWithoutDrop):
+    def insert_text(self, substring, from_undo=False):
+        substring = re.sub('[^0-9]', '', substring)
+        return super(PaymentTF, self).insert_text(substring, from_undo=from_undo)
+
+    def on_text_validate(self):
+        pat = "^[1-9]*[0-9]$"
+
+        if not re.match(pat, self.text):
+            self.text = ""
+
+        super(PaymentTF, self).on_text_validate()
+
+
 class TFWithDrop(TextField):
     def __init__(self, **kwargs):
         super(TFWithDrop, self).__init__(**kwargs)
@@ -838,7 +938,7 @@ class TFWithDrop(TextField):
 
         return filled_fields
 
-    def _drop_menu_add_data_and_close(self):
+    def drop_menu_add_data_and_close(self):
         self._drop_menu_add_data()
         self.drop_menu.dismiss()
 
@@ -846,6 +946,15 @@ class TFWithDrop(TextField):
         """Создает Dialog для добавления новых данных в БД."""
         self.add_data_dialog = AddDataWindow(type_=self.data_table, filled_field=filled_fields, caller_=self)
         self.add_data_dialog.open()
+
+
+class GamePassedCheck(CheckBox):
+    def __init__(self, **kwargs):
+        instr = kwargs.pop('instruction')
+        self.size_hint_x = instr.setdefault('size_hint_x', 1)
+        self.data_key = instr.setdefault('data_key')
+
+        super(GamePassedCheck, self).__init__()
 
 
 class MainApp(MDApp):
