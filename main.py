@@ -12,7 +12,9 @@ from kivy.properties import ObjectProperty
 from kivy.metrics import dp
 
 from kivymd.color_definitions import colors
+from kivymd.uix.expansionpanel import MDExpansionPanel, MDExpansionPanelOneLine
 from kivymd.uix.boxlayout import MDBoxLayout
+from kivymd.uix.gridlayout import MDGridLayout
 from kivymd.uix.card import MDCard
 from kivymd.uix.datatables import MDDataTable
 from kivymd.uix.dialog import MDDialog
@@ -363,7 +365,7 @@ class AddDataContent(RecycleView):
         self.children_ = []
         self._add_items_in_box(self.items, self.ids.box)
 
-    def _add_items_in_box(self, items: list, box: Layout):
+    def _add_items_in_box(self, items: list, box):
         """Добавляет items в главный BoxLayout.
 
         Parameters:
@@ -377,37 +379,54 @@ class AddDataContent(RecycleView):
 
         for item in items:
             if type(item) == list:
-                hor_box = MDBoxLayout(orientation="horizontal", spacing=dp(10))
-                box.add_widget(hor_box)
-                self._add_items_in_box(item, hor_box)
+                self._add_items_in_box(item, box)
 
             elif type(item) == dict:
                 class_ = item.setdefault('class', '')
                 type_ = item.setdefault('type', '')
 
-                if class_ == "textfield":
+                if class_ == "boxlayout":
+                    box_ = MDBoxLayout(orientation=item.setdefault("orientation", "vertical"),
+                                       spacing=item.setdefault("spacing", 0),
+                                       padding=item.setdefault("padding", 0)
+                                       )
+                    box.add_widget(box_)
+                    box = box_
+
+                elif class_ == "expansionpanel":
+                    box_ = MDGridLayout(adaptive_height=True, cols=1)
+                    panel = MDExpansionPanel(panel_cls=MDExpansionPanelOneLine(text=item.setdefault("panel_text", "")),
+                                             content=box_,
+                                             icon=item.setdefault("icon", ""))
+
+                    box.add_widget(panel)
+                    box = box_
+
+                elif class_ == "textfield":
+                    print(box)
                     # заполняет уже имеющиеся данные в строке, если есть
                     text = self.filled_field.pop(item['data_key'], '')
+                    self._add_textfield(type_, box, parent_=self, instruction=item, text=text)
 
-                    self._add_textfield(type_, item, text, box)
                 elif class_ == "checkbox":
                     self._add_checkbutton(item, box)
+
                 elif class_ == "label":
                     self._add_label(item, box)
 
-    def _add_textfield(self, type_, instr, text, box):
+    def _add_textfield(self, type_, box, **kwargs):
         if type_ == 'date_and_time':
-            self._add_widget(DateAndTimeTF(parent_=self, instruction=instr, text=text), box)
+            self._add_widget(DateAndTimeTF(**kwargs), box)
         elif type_ == 'phone':
-            self._add_widget(PhoneTF(parent_=self, instruction=instr, text=text), box)
+            self._add_widget(PhoneTF(**kwargs), box)
         elif type_ == 'age':
-            self._add_widget(YearTF(parent_=self, instruction=instr, text=text), box)
+            self._add_widget(YearTF(**kwargs), box)
         elif type_ == 'payment':
-            self._add_widget(PaymentTF(parent_=self, instruction=instr, text=text), box)
-        elif instr.setdefault('drop_menu', False):
-            self._add_widget(TFWithDrop(parent_=self, instruction=instr, text=text), box)
+            self._add_widget(PaymentTF(**kwargs), box)
+        elif type_ == 'with_dropmenu':
+            self._add_widget(TFWithDrop(**kwargs), box)
         else:
-            self._add_widget(TFWithoutDrop(parent_=self, instruction=instr, text=text), box)
+            self._add_widget(TFWithoutDrop(**kwargs), box)
 
     def _add_checkbutton(self, instr: dict, box: Layout):
         self._add_widget(GamePassedCheck(instruction=instr), box)
@@ -570,40 +589,47 @@ class AddGameContent(AddDataContent):
         self.data_table = "games"
         self.items = [
             [
+                {'class': 'boxlayout', 'orientation': 'horizontal', 'spacing': 10},
                 {'class': 'checkbox', 'data_key': 'game_passed', 'size_hint_x': 0.1},
                 {'class': 'label', 'text': 'Game passed', 'size_hint_x': 0.2},
+                {'class': 'label', 'text': '', 'size_hint_x': 0.5},
                 {'class': 'textfield', 'type': 'payment', 'name': 'Payment', 'data_key': 'payment', 'size_hint_x': 0.5}
             ],
-            {'name': 'Stadium', 'class': 'textfield', 'what_fields_child_fill': ['name'],
-             'data_table': 'stadium', 'data_key': 'stadium_id', 'drop_menu': True, 'notnull': True},
+            {'name': 'Stadium', 'class': 'textfield', 'type': 'with_dropmenu', 'what_fields_child_fill': ['name'],
+             'data_table': 'stadium', 'data_key': 'stadium_id', 'notnull': True},
             {'name': 'Data and Time', 'class': 'textfield', 'type': 'date_and_time', 'data_key': 'date_and_time',
              'notnull': True},
-            {'name': 'League', 'class': 'textfield', 'what_fields_child_fill': ['name'],
-             'data_table': 'league', 'data_key': 'league_id', 'drop_menu': True, 'notnull': True},
+            {'name': 'League', 'class': 'textfield', 'type': 'with_dropmenu', 'what_fields_child_fill': ['name'],
+             'data_table': 'league', 'data_key': 'league_id', 'notnull': True},
             [
-                {'name': 'Home team', 'class': 'textfield', 'what_fields_child_fill': ['name'],
-                 'data_table': 'team', 'data_key': 'team_home', 'drop_menu': True, 'notnull': True},
+                {'class': 'boxlayout', 'orientation': 'horizontal', 'spacing': 10},
+                {'name': 'Home team', 'class': 'textfield', 'type': 'with_dropmenu', 'what_fields_child_fill': ['name'],
+                 'data_table': 'team', 'data_key': 'team_home', 'notnull': True},
                 {'name': 'Year home team', 'class': 'textfield', 'type': 'age', 'data_key': 'team_home_year',
                  'size_hint_x': 0.35}
             ],
             [
-                {'name': 'Guest team', 'class': 'textfield', 'what_fields_child_fill': ['name'],
-                 'data_table': 'team', 'data_key': 'team_guest', 'drop_menu': True, 'notnull': True},
+                {'class': 'boxlayout', 'orientation': 'horizontal', 'spacing': 10},
+                {'name': 'Guest team', 'class': 'textfield', 'type': 'with_dropmenu', 'what_fields_child_fill': ['name'],
+                 'data_table': 'team', 'data_key': 'team_guest', 'notnull': True},
                 {'name': 'Year guest team', 'class': 'textfield', 'type': 'age', 'data_key': 'team_guest_year',
                  'size_hint_x': 0.35}
             ],
-            {'name': 'Chief referee', 'class': 'textfield',
+            {'name': 'Chief referee', 'class': 'textfield', 'type': 'with_dropmenu',
              'what_fields_child_fill': ['second_name', 'first_name', 'third_name'],
-             'data_table': 'referee', 'data_key': 'referee_chief', 'drop_menu': True, 'notnull': True},
-            {'name': 'First referee', 'class': 'textfield',
-             'what_fields_child_fill': ['second_name', 'first_name', 'third_name'],
-             'data_table': 'referee', 'data_key': 'referee_first', 'drop_menu': True},
-            {'name': 'Second referee', 'class': 'textfield',
-             'what_fields_child_fill': ['second_name', 'first_name', 'third_name'],
-             'data_table': 'referee', 'data_key': 'referee_second', 'drop_menu': True},
-            {'name': 'Reserve referee', 'class': 'textfield',
-             'what_fields_child_fill': ['second_name', 'first_name', 'third_name'],
-             'data_table': 'referee', 'data_key': 'referee_reserve', 'drop_menu': True}
+             'data_table': 'referee', 'data_key': 'referee_chief', 'notnull': True},
+            [
+                {'class': 'expansionpanel', 'panel_text': 'Referee'},
+                {'name': 'First referee', 'class': 'textfield', 'type': 'with_dropmenu',
+                 'what_fields_child_fill': ['second_name', 'first_name', 'third_name'],
+                 'data_table': 'referee', 'data_key': 'referee_first'},
+                {'name': 'Second referee', 'class': 'textfield', 'type': 'with_dropmenu',
+                 'what_fields_child_fill': ['second_name', 'first_name', 'third_name'],
+                 'data_table': 'referee', 'data_key': 'referee_second'},
+                {'name': 'Reserve referee', 'class': 'textfield', 'type': 'with_dropmenu',
+                 'what_fields_child_fill': ['second_name', 'first_name', 'third_name'],
+                 'data_table': 'referee', 'data_key': 'referee_reserve'}
+            ]
         ]
 
         super(AddGameContent, self).__init__(**kwargs)
@@ -619,8 +645,8 @@ class AddRefereeContent(AddDataContent):
              'add_text_in_parent': True},
             {'name': 'Third name', 'class': 'textfield', 'data_key': 'third_name'},
             {'name': 'Phone', 'class': 'textfield', 'type': 'phone', 'data_key': 'phone'},
-            {'name': 'Category', 'class': 'textfield', 'what_fields_child_fill': ['name'],
-             'data_table': 'category', 'data_key': 'category_id', 'drop_menu': True}
+            {'name': 'Category', 'class': 'textfield', 'type': 'with_dropmenu', 'what_fields_child_fill': ['name'],
+             'data_table': 'category', 'data_key': 'category_id'}
         ]
 
         super(AddRefereeContent, self).__init__(**kwargs)
@@ -631,8 +657,8 @@ class AddStadiumContent(AddDataContent):
         self.data_table = "stadium"
         self.items = [
             {'name': 'Name', 'class': 'textfield', 'data_key': 'name', 'notnull': True, 'add_text_in_parent': True},
-            {'name': 'City', 'class': 'textfield', 'what_fields_child_fill': ['name'],
-             'data_table': 'city', 'data_key': 'city_id', 'drop_menu': True, 'notnull': True},
+            {'name': 'City', 'class': 'textfield', 'type': 'with_dropmenu', 'what_fields_child_fill': ['name'],
+             'data_table': 'city', 'data_key': 'city_id', 'notnull': True},
             {'name': 'Address', 'class': 'textfield', 'data_key': 'address', 'notnull': True},
         ]
 
@@ -840,7 +866,7 @@ class PaymentTF(TFWithoutDrop):
         return super(PaymentTF, self).insert_text(substring, from_undo=from_undo)
 
     def on_text_validate(self):
-        pat = "^[1-9]*[0-9]$"
+        pat = "^[^0][0-9]*$"
 
         if not re.match(pat, self.text):
             self.text = ""
@@ -959,7 +985,7 @@ class GamePassedCheck(CheckBox):
 
 class MainApp(MDApp):
     def build(self):
-        self.theme_cls.primary_palette = "Gray"
+        self.theme_cls.primary_palette = "Orange"
         self.theme_cls.theme_style = "Dark"
 
         self.app_screen = AppScreen()
