@@ -1,7 +1,7 @@
 import re
 from typing import Optional, Any, Union, List, Tuple
 
-from kivy.uix.widget import WidgetException
+from kivy.uix.widget import WidgetException, Widget
 from kivymd.uix.snackbar import Snackbar
 from kivy.clock import Clock
 from kivy.uix.boxlayout import BoxLayout
@@ -86,7 +86,7 @@ class GamesTable(MDDataTable):
         # ключи showed_data должны совпадать с именами атрибутов класса Game
         self.data_dict = {"date": ('Дата', dp(20)),
                           "time": ('Время', dp(12)),
-                          "league": ('Лига', ),
+                          "league": ('Лига',),
                           "stadium": ('Стадион',),
                           "team_home": ('Хозяева',),
                           "team_guest": ('Гости',),
@@ -97,7 +97,7 @@ class GamesTable(MDDataTable):
         # проверка, если в будущем будет несколько таблиц с заданными показываемыми значениями
         # значения showed_data должны состоять из ключей data_dict
         assert all(map(lambda data: data in Game.attribute, self.showed_data)), "" \
-                                                                            f"showed_data might be in {Game.attribute}"
+                                                                                f"showed_data might be in {Game.attribute}"
 
         self.elevation = 100
         self.rows_num = 10
@@ -393,17 +393,23 @@ class AddDataContent(RecycleView):
                     box.add_widget(box_)
                     box = box_
 
+                elif class_ == "gridlayout":
+                    box_ = MDGridLayout(rows=item.setdefault("cols", 1),
+                                        cols=item.setdefault("rows", 1))
+                    box.add_widget(box_)
+                    box = box_
+
                 elif class_ == "expansionpanel":
                     box_ = MDGridLayout(adaptive_height=True, cols=1)
-                    panel = MDExpansionPanel(panel_cls=MDExpansionPanelOneLine(text=item.setdefault("panel_text", "")),
-                                             content=box_,
-                                             icon=item.setdefault("icon", ""))
+                    panel = ExpansionPanel(self,
+                                           panel_cls=MDExpansionPanelOneLine(text=item.setdefault("panel_text", "")),
+                                           content=box_,
+                                           icon=item.setdefault("icon", ""))
 
                     box.add_widget(panel)
                     box = box_
 
                 elif class_ == "textfield":
-                    print(box)
                     # заполняет уже имеющиеся данные в строке, если есть
                     text = self.filled_field.pop(item['data_key'], '')
                     self._add_textfield(type_, box, parent_=self, instruction=item, text=text)
@@ -457,9 +463,30 @@ class AddDataContent(RecycleView):
         return dp(height)
 
     def _get_box_height(self):
-        """Устанавливает высоту BoxLayout в зависимости от количества items."""
-        height = len(self.items) * 62
+        """Устанавливает высоту BoxLayout в зависимости от количества items и их заданной высоты."""
+        # высота item, если она не указана
+        self.default_item_height = 62
+
+        height = self._get_items_height(self.items)
+
         return dp(height)
+
+    def increase_box_height(self, items: List[Union[list, dict]]):
+        self.ids.box.height += self._get_items_height(items)
+
+    def reduce_box_height(self, items: List[Union[list, dict]]):
+        self.ids.box.height -= self._get_items_height(items)
+
+    def _get_items_height(self, items: List[Union[list, dict]]):
+        items_all_height = []
+
+        for item in items:
+            if type(item) == list:
+                items_all_height.append(item[0].setdefault("height_dp", self.default_item_height))
+            elif type(item) == dict:
+                items_all_height.append(item.setdefault("height_dp", self.default_item_height))
+
+        return sum(items_all_height)
 
     def update_db(self) -> bool:
         """Обрабатывает полученные из полей данные и отправляет на обновление БД.
@@ -596,7 +623,7 @@ class AddGameContent(AddDataContent):
                 {'class': 'textfield', 'type': 'payment', 'name': 'Payment', 'data_key': 'payment', 'size_hint_x': 0.5}
             ],
             {'name': 'Stadium', 'class': 'textfield', 'type': 'with_dropmenu', 'what_fields_child_fill': ['name'],
-             'data_table': 'stadium', 'data_key': 'stadium_id', 'notnull': True},
+             'data_table': 'stadium', 'data_key': 'stadium_id', 'notnull': True, 'height_dp': 90},
             {'name': 'Data and Time', 'class': 'textfield', 'type': 'date_and_time', 'data_key': 'date_and_time',
              'notnull': True},
             {'name': 'League', 'class': 'textfield', 'type': 'with_dropmenu', 'what_fields_child_fill': ['name'],
@@ -606,11 +633,12 @@ class AddGameContent(AddDataContent):
                 {'name': 'Home team', 'class': 'textfield', 'type': 'with_dropmenu', 'what_fields_child_fill': ['name'],
                  'data_table': 'team', 'data_key': 'team_home', 'notnull': True},
                 {'name': 'Year home team', 'class': 'textfield', 'type': 'age', 'data_key': 'team_home_year',
-                 'size_hint_x': 0.35}
+                 'size_hint_x': 0.35},
             ],
             [
                 {'class': 'boxlayout', 'orientation': 'horizontal', 'spacing': 10},
-                {'name': 'Guest team', 'class': 'textfield', 'type': 'with_dropmenu', 'what_fields_child_fill': ['name'],
+                {'name': 'Guest team', 'class': 'textfield', 'type': 'with_dropmenu',
+                 'what_fields_child_fill': ['name'],
                  'data_table': 'team', 'data_key': 'team_guest', 'notnull': True},
                 {'name': 'Year guest team', 'class': 'textfield', 'type': 'age', 'data_key': 'team_guest_year',
                  'size_hint_x': 0.35}
@@ -699,6 +727,27 @@ class AddCityContent(AddDataContent):
             {'name': 'Name', 'class': 'textfield', 'data_key': 'name', 'notnull': True, 'add_text_in_parent': True}]
 
         super(AddCityContent, self).__init__(**kwargs)
+
+
+class ExpansionPanel(MDExpansionPanel):
+    def __init__(self, parent, **kwargs):
+        self.parent_ = parent
+
+        super(ExpansionPanel, self).__init__(**kwargs)
+
+    def on_open(self):
+        self.parent_.increase_box_height(self.get_widgets_height(self.content.children))
+
+    def on_close(self):
+        self.parent_.reduce_box_height(self.get_widgets_height(self.content.children))
+
+    def get_widgets_height(self, widgets):
+        list_child_height_dp = []
+        for child in widgets:
+            child_height_dp = getattr(child, "height_dp", None)
+            list_child_height_dp.append({"height_dp": child_height_dp} if child_height_dp else {})
+
+        return list_child_height_dp
 
 
 class TextField(MDTextField):
