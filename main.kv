@@ -1,4 +1,4 @@
-<GameScreen>:
+<AppScreen>:
     games_layout: games_layout
 
     MDBoxLayout:
@@ -6,6 +6,8 @@
         MDToolbar:
             title: 'App'
             type: 'top'
+            md_bg_color: app.theme_cls.primary_color
+            right_action_items: [["dots-vertical", lambda x: root.menu_settings()]]
 
         MDBottomNavigation:
             panel_color: .5, .5, .5, 1
@@ -21,15 +23,12 @@
                 BoxLayout:
                     id: games_layout
 
-                MDFloatingActionButtonSpeedDial:
+                MDFloatingActionButton:
                     rotation_root_button: True
-                    callback: root.add_button_callback
-                    data:
-                        {'Stadium': 'stadium-variant',
-                        'Referee': 'account-plus-outline',
-                        'Game': 'cookie-plus-outline'}
+                    pos_hint: {'center_x': .93, 'center_y': .1}
                     icon: 'plus'
                     md_bg_color: app.theme_cls.primary_color
+                    on_press: root.add_button_callback()
 
             MDBottomNavigationItem:
                 name: 'finance'
@@ -43,70 +42,26 @@
 
 
             MDBottomNavigationItem:
-                name: 'comming'
+                name: 'coming'
                 text: 'python'
                 icon: 'language-python'
 
                 MDLabel:
-                    text: 'Comming soon'
+                    text: 'Coming soon'
                     halign: 'center'
 
+<TextField>:
+    on_focus: if self.focus: root.on_focus_()
+    on_cursor: root.on_cursor_()
 
-<AddMatch>:
+
+<DialogContent>:
     size_hint_y: None
-    height: "350dp"
-    BoxLayout:
+    height: self._get_height()
+
+    MDBoxLayout:
+        id: box
+        spacing: "10dp"
         orientation: "vertical"
         size_hint_y: None
-        height: "480dp"
-
-        MDTextField:
-            hint_text: "Stadium"
-            on_focus: root.open_drop_menu(self)
-
-        MDTextField:
-            hint_text: "Date and time"
-            on_focus: root.open_drop_menu(self)
-
-        MDTextField:
-            hint_text: "League"
-            on_focus: root.open_drop_menu(self)
-
-        MDTextField:
-            hint_text: "Home team"
-            on_focus: root.open_drop_menu(self)
-
-        MDTextField:
-            hint_text: "Guest team"
-            on_focus: root.open_drop_menu(self)
-
-        MDTextField:
-            hint_text: "Chief referee"
-            on_focus: root.open_drop_menu(self)
-
-        MDTextField:
-            hint_text: "First referee"
-            on_focus: root.open_drop_menu(self)
-
-        MDTextField:
-            hint_text: "Second referee"
-            on_focus: root.open_drop_menu(self)
-
-        MDTextField:
-            hint_text: "Reserve referee"
-            on_focus: root.open_drop_menu(self)
-
-
-<MatchTable>:
-    cell_size: 30
-    use_pagination: False
-    check: True
-    column_data:
-        [('Дата', 28),
-        ('Время', 12),
-        ('Лига', self.cell_size),
-        ('Стадион', self.cell_size),
-        ('Хозяева', self.cell_size),
-        ('Гости', self.cell_size),
-        ('Фамилия', self.cell_size)]
-    row_data: root.take_games
+        height: root._get_box_height()
