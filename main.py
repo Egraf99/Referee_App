@@ -24,6 +24,7 @@ from kivy.uix.label import Label
 from kivymd.uix.list import OneLineAvatarIconListItem, OneLineIconListItem
 from kivymd.uix.snackbar import Snackbar
 from kivy.uix.behaviors.focus import FocusBehavior
+from kivymd.uix.behaviors import TouchBehavior
 from kivy.uix.recycleview import RecycleView
 from kivymd.uix.menu import MDDropdownMenu
 from kivymd.app import MDApp
@@ -63,7 +64,7 @@ class AppScreen(BoxLayout):
 
     def pop_dialog_add_game(self) -> None:
         """Открывает Dialog для добавления новой игры."""
-        self.add_game_dialog = AddDataWindow(type_="games")
+        self.add_game_dialog = DialogWindow(type_="games")
         self.add_game_dialog.open()
 
     def menu_settings(self):
@@ -78,7 +79,7 @@ class AppScreen(BoxLayout):
         self.add_game_dialog.dismiss()
 
 
-class GamesTable(MDDataTable):
+class GamesTable(MDDataTable, TouchBehavior):
     """Класс таблицы для отображения записанных в БД игр."""
 
     def __init__(self):
@@ -92,12 +93,12 @@ class GamesTable(MDDataTable):
                           "team_guest": ('Гости',),
                           "status": ('Статус', dp(30))}
 
-        self.showed_data = ["date", "time", "stadium", "status", "referee_chief"]
+        self.showed_data = ["date", "time", "stadium", "status"]
 
         # проверка, если в будущем будет несколько таблиц с заданными показываемыми значениями
         # значения showed_data должны состоять из ключей data_dict
         assert all(map(lambda data: data in Game.attribute, self.showed_data)), "" \
-                                                                                f"showed_data might be in {Game.attribute}"
+                                                                            f"showed_data might be in {Game.attribute}"
 
         self.elevation = 100
         self.rows_num = 10
@@ -109,6 +110,20 @@ class GamesTable(MDDataTable):
         super(GamesTable, self).__init__()
 
         self.count_cell_in_row = len(self.column_data)
+
+        self.touched_cell = None
+
+    def on_row_press(self, instance_cell_row):
+        """Necessary for saving touched Cell"""
+        self.touched_cell = instance_cell_row
+
+    def on_long_touch(self, touch, *args):
+        # строка, в которой находится нажатая клетка
+        row_cell = self.touched_cell.index // self.count_cell_in_row
+
+        # игра, записанная в данной строке
+        game = self.list_of_games[row_cell]
+        print(game.status_key)
 
     def _set_column_name_and_size(self, data: str):
         if data in self.data_dict:
@@ -129,14 +144,6 @@ class GamesTable(MDDataTable):
     def update(self):
         """Обновляет таблицу"""
         self.row_data = self._take_games()
-
-    def on_row_press(self, instance_cell_row):
-        # трока, в которой находится нажатая клетка
-        row_cell = instance_cell_row.index // self.count_cell_in_row
-
-        # игра, записанная в данной строке
-        game = self.list_of_games[row_cell]
-        print(game.status_key)
 
     def _take_games(self) -> list:
         """Возвращает преобразованные в табличные значения данные из БД.
@@ -304,7 +311,7 @@ class DropMenu(MDDropdownMenu):
             self.open()
 
 
-class AddDataWindow(MDDialog):
+class DialogWindow(MDDialog):
     def __init__(self, **kwargs):
         """Parameters:
                 type_(str) - тип создаваемого MDDialog. type_ может принимать значения: 
@@ -324,11 +331,11 @@ class AddDataWindow(MDDialog):
         self.buttons = [MDFlatButton(text="CANCEL", on_release=self.dismiss),
                         MDFlatButton(text="ADD", on_release=self._add_button_click)]
 
-        super(AddDataWindow, self).__init__()
+        super(DialogWindow, self).__init__()
 
     def _set_content_cls(self, type_, **kwargs) -> None:
         if type_ == "games":
-            self.content_cls = AddGameContent(**kwargs)
+            self.content_cls = AddGameContent()
         if type_ == "referee":
             self.content_cls = AddRefereeContent(**kwargs)
         if type_ == "stadium":
@@ -349,7 +356,7 @@ class AddDataWindow(MDDialog):
             self.caller_.parent.parent.set_focus()
 
 
-class AddDataContent(RecycleView):
+class DialogContent(RecycleView):
     def __init__(self, **kwargs):
         """Parameters:
                 caller_ (Any) - объект, создавший и вызвавший этот класс.
@@ -360,7 +367,7 @@ class AddDataContent(RecycleView):
         self.caller_ = kwargs.pop('caller_', None)
         self.filled_field = kwargs.pop('filled_field', {})
 
-        super(AddDataContent, self).__init__(**kwargs)
+        super(DialogContent, self).__init__(**kwargs)
 
         self.children_ = []
         self._add_items_in_box(self.items, self.ids.box)
@@ -515,7 +522,7 @@ class AddDataContent(RecycleView):
 
         DB.insert(self.data_table, data)
 
-        # self.parent - BoxLayout, self.parent.parent - MDCard, self.parent.parent.parent - AddDataWindow
+        # self.parent - BoxLayout, self.parent.parent - MDCard, self.parent.parent.parent - DialogWindow
         self.parent.parent.parent.dismiss()
 
         if not self.caller_:
@@ -607,8 +614,8 @@ class AddDataContent(RecycleView):
                     self.scroll_to(next_widget)
 
 
-class AddGameContent(AddDataContent):
-    def __init__(self, **kwargs):
+class AddGameContent(DialogContent):
+    def __init__(self):
         self.data_table = "games"
         self.items = [
             [
@@ -656,10 +663,10 @@ class AddGameContent(AddDataContent):
             ]
         ]
 
-        super(AddGameContent, self).__init__(**kwargs)
+        super(AddGameContent, self).__init__()
 
 
-class AddRefereeContent(AddDataContent):
+class AddRefereeContent(DialogContent):
     def __init__(self, **kwargs):
         self.data_table = "referee"
         self.items = [
@@ -676,7 +683,7 @@ class AddRefereeContent(AddDataContent):
         super(AddRefereeContent, self).__init__(**kwargs)
 
 
-class AddStadiumContent(AddDataContent):
+class AddStadiumContent(DialogContent):
     def __init__(self, **kwargs):
         self.data_table = "stadium"
         self.items = [
@@ -689,7 +696,7 @@ class AddStadiumContent(AddDataContent):
         super(AddStadiumContent, self).__init__(**kwargs)
 
 
-class AddLeagueContent(AddDataContent):
+class AddLeagueContent(DialogContent):
     def __init__(self, **kwargs):
         self.data_table = "league"
         self.items = [
@@ -698,7 +705,7 @@ class AddLeagueContent(AddDataContent):
         super(AddLeagueContent, self).__init__(**kwargs)
 
 
-class AddTeamContent(AddDataContent):
+class AddTeamContent(DialogContent):
     def __init__(self, **kwargs):
         self.data_table = "team"
         self.items = [
@@ -707,7 +714,7 @@ class AddTeamContent(AddDataContent):
         super(AddTeamContent, self).__init__(**kwargs)
 
 
-class AddCategoryContent(AddDataContent):
+class AddCategoryContent(DialogContent):
     def __init__(self, **kwargs):
         self.data_table = "category"
         self.items = [
@@ -716,7 +723,7 @@ class AddCategoryContent(AddDataContent):
         super(AddCategoryContent, self).__init__(**kwargs)
 
 
-class AddCityContent(AddDataContent):
+class AddCityContent(DialogContent):
     def __init__(self, **kwargs):
         self.data_table = "city"
         self.items = [
@@ -743,6 +750,7 @@ class ExpansionPanel(MDExpansionPanel):
 
     def _set_first_child_focus(self, dp=None):
         self.set_child_focus(-1)
+
 
 class TextField(MDTextField):
     def __init__(self, **kwargs):
@@ -922,9 +930,6 @@ class TFWithDrop(TextField):
         super(TFWithDrop, self).__init__(**kwargs)
         self.have_drop_menu = True
 
-        self.max_height = dp(100)
-        self.height = dp(80)
-        print(self.size_hint_y, self.height)
         self.drop_menu = DropMenu()
 
     def add_item_in_text_input(self, text_item):
@@ -1015,7 +1020,7 @@ class TFWithDrop(TextField):
 
     def _drop_menu_add_data(self, filled_fields=None):
         """Создает Dialog для добавления новых данных в БД."""
-        self.add_data_dialog = AddDataWindow(type_=self.data_table, filled_field=filled_fields, caller_=self)
+        self.add_data_dialog = DialogWindow(type_=self.data_table, filled_field=filled_fields, caller_=self)
         self.add_data_dialog.open()
 
 
@@ -1031,6 +1036,10 @@ class GamePassedCheck(CheckBox):
 class MainApp(MDApp):
     def build(self):
         self.theme_cls.primary_palette = "Orange"
+        self.theme_cls.primary_hue = "500"
+        self.theme_cls.primary_darkhue = "900"
+        self.theme_cls.primary_lighthue = "300"
+
         self.theme_cls.theme_style = "Dark"
 
         self.app_screen = AppScreen()
