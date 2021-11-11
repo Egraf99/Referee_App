@@ -376,6 +376,7 @@ class AddDataContent(RecycleView):
                   Ширина отдельного объекта зависит от значения 'size_hint_x' в словаре.
 
             box (BoxLayout)- контейнер для добавления объектов."""
+        box.padding = [0, 0, 20, 0]
 
         for item in items:
             if type(item) == list:
@@ -394,13 +395,16 @@ class AddDataContent(RecycleView):
                     box = box_
 
                 elif class_ == "gridlayout":
-                    box_ = MDGridLayout(rows=item.setdefault("cols", 1),
+                    box_ = MDGridLayout(
+                                        rows=item.setdefault("cols", 1),
                                         cols=item.setdefault("rows", 1))
                     box.add_widget(box_)
                     box = box_
 
                 elif class_ == "expansionpanel":
-                    box_ = MDGridLayout(adaptive_height=True, cols=1)
+                    box_ = MDGridLayout(padding=[0, 10, 0, 0],
+                                        spacing=10,
+                                        adaptive_height=True, cols=1)
                     panel = ExpansionPanel(self,
                                            panel_cls=MDExpansionPanelOneLine(text=item.setdefault("panel_text", "")),
                                            content=box_,
@@ -478,15 +482,7 @@ class AddDataContent(RecycleView):
         self.ids.box.height -= self._get_items_height(items)
 
     def _get_items_height(self, items: List[Union[list, dict]]):
-        items_all_height = []
-
-        for item in items:
-            if type(item) == list:
-                items_all_height.append(item[0].setdefault("height_dp", self.default_item_height))
-            elif type(item) == dict:
-                items_all_height.append(item.setdefault("height_dp", self.default_item_height))
-
-        return sum(items_all_height)
+        return self.default_item_height * len(items)
 
     def update_db(self) -> bool:
         """Обрабатывает полученные из полей данные и отправляет на обновление БД.
@@ -623,7 +619,7 @@ class AddGameContent(AddDataContent):
                 {'class': 'textfield', 'type': 'payment', 'name': 'Payment', 'data_key': 'payment', 'size_hint_x': 0.5}
             ],
             {'name': 'Stadium', 'class': 'textfield', 'type': 'with_dropmenu', 'what_fields_child_fill': ['name'],
-             'data_table': 'stadium', 'data_key': 'stadium_id', 'notnull': True, 'height_dp': 90},
+             'data_table': 'stadium', 'data_key': 'stadium_id', 'notnull': True},
             {'name': 'Data and Time', 'class': 'textfield', 'type': 'date_and_time', 'data_key': 'date_and_time',
              'notnull': True},
             {'name': 'League', 'class': 'textfield', 'type': 'with_dropmenu', 'what_fields_child_fill': ['name'],
@@ -736,19 +732,17 @@ class ExpansionPanel(MDExpansionPanel):
         super(ExpansionPanel, self).__init__(**kwargs)
 
     def on_open(self):
-        self.parent_.increase_box_height(self.get_widgets_height(self.content.children))
+        self.parent_.increase_box_height(self.content.children)
+        Clock.schedule_once(self._set_first_child_focus, 0.3)
 
     def on_close(self):
-        self.parent_.reduce_box_height(self.get_widgets_height(self.content.children))
+        self.parent_.reduce_box_height(self.content.children)
 
-    def get_widgets_height(self, widgets):
-        list_child_height_dp = []
-        for child in widgets:
-            child_height_dp = getattr(child, "height_dp", None)
-            list_child_height_dp.append({"height_dp": child_height_dp} if child_height_dp else {})
+    def set_child_focus(self, inx_child: int):
+        self.content.children[inx_child].focus = True
 
-        return list_child_height_dp
-
+    def _set_first_child_focus(self, dp=None):
+        self.set_child_focus(-1)
 
 class TextField(MDTextField):
     def __init__(self, **kwargs):
@@ -926,9 +920,11 @@ class PaymentTF(TFWithoutDrop):
 class TFWithDrop(TextField):
     def __init__(self, **kwargs):
         super(TFWithDrop, self).__init__(**kwargs)
-
         self.have_drop_menu = True
 
+        self.max_height = dp(100)
+        self.height = dp(80)
+        print(self.size_hint_y, self.height)
         self.drop_menu = DropMenu()
 
     def add_item_in_text_input(self, text_item):
