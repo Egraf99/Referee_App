@@ -40,6 +40,9 @@ class ConnDB:
     def insert(self, table: str, data: dict) -> None:
         self._convert_special_date(data)
 
+        for k, v in data.items():
+            data[k] = int(v) if type(v) == str and v.isdigit() else v
+
         column = ','.join(d for d in data.keys())
         count_values = ','.join('?' * len(data.values()))
         values = [d for d in data.values()]
@@ -53,15 +56,16 @@ class ConnDB:
     @staticmethod
     def _convert_special_date(data: dict) -> None:
         """Преаобразует специальные поля (дата, время, телефон) в формат значений БД."""
-        if "date_and_time" in data.keys():
-            # year, day, month, time
-            date = data.pop("date_and_time").split(" ")
+        if "date" in data.keys():
+            date = data.pop("date").split(" ")
             day, month, year = date[0].split(".")
-            time = date[1].replace(':', '')
 
-            _data = {'day': day, 'month': month, 'year': year, 'time': time}
+            _data = {'day': day, 'month': month, 'year': year}
             for i in _data:
                 data[i] = _data[i]
+
+        if "time" in data.keys():
+            data["time"].replace(":", "")
 
         if "phone" in data.keys():
             # в телефоне оставляем только числа
@@ -97,4 +101,4 @@ class ConnDB:
 
 
 if __name__ == '__main__':
-    print(ConnDB().take_data("id", "referee", {"first_name": "Егор", "second_name": "Ходин"}, one_value=True))
+    print(ConnDB().insert("game", {"payment": "2000", "year": 2021, "first_name": "Егор", "second_name": "Ходин"}))
