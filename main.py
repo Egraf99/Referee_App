@@ -506,23 +506,6 @@ class DialogContent(RecycleView):
     def _get_items_height(self, count_items: int):
         return self.default_item_height * count_items
 
-    def increase_box_height(self, items: List[Union[list, dict]]):
-        self.ids.box.height += self._get_items_height(items)
-
-    def reduce_box_height(self, items: List[Union[list, dict]]):
-        self.ids.box.height -= self._get_items_height(items)
-
-    def _get_items_height(self, items: List[Union[list, dict]]):
-        items_all_height = []
-
-        for item in items:
-            if type(item) == list:
-                items_all_height.append(item[0].setdefault("height_dp", self.default_item_height))
-            elif type(item) == dict:
-                items_all_height.append(item.setdefault("height_dp", self.default_item_height))
-
-        return sum(items_all_height)
-
     def update_db(self) -> bool:
         """Обрабатывает полученные из полей данные и отправляет на обновление БД.
 
