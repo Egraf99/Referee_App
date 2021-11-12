@@ -1,4 +1,6 @@
 import re
+from math import ceil
+
 from typing import Optional, Any, Union, List, Tuple
 
 from kivy.uix.widget import WidgetException, Widget
@@ -18,17 +20,18 @@ from kivymd.uix.gridlayout import MDGridLayout
 from kivymd.uix.card import MDCard
 from kivymd.uix.datatables import MDDataTable
 from kivymd.uix.dialog import MDDialog
-from kivymd.uix.button import MDFlatButton, MDFloatingActionButton
+from kivymd.uix.button import MDFlatButton, MDFloatingActionButton, MDRaisedButton
 from kivymd.uix.textfield import MDTextField
 from kivy.uix.label import Label
 from kivymd.uix.list import OneLineAvatarIconListItem, OneLineIconListItem
 from kivymd.uix.snackbar import Snackbar
 from kivy.uix.behaviors.focus import FocusBehavior
+from kivymd.uix.behaviors import TouchBehavior
 from kivy.uix.recycleview import RecycleView
 from kivymd.uix.menu import MDDropdownMenu
 from kivymd.app import MDApp
 
-from datebase import ConnDB
+from database import ConnDB
 
 
 def open_dialog(text):
@@ -63,7 +66,7 @@ class AppScreen(BoxLayout):
 
     def pop_dialog_add_game(self) -> None:
         """Открывает Dialog для добавления новой игры."""
-        self.add_game_dialog = AddDataWindow(type_="games")
+        self.add_game_dialog = DialogWindow(type_="games")
         self.add_game_dialog.open()
 
     def menu_settings(self):
@@ -78,7 +81,7 @@ class AppScreen(BoxLayout):
         self.add_game_dialog.dismiss()
 
 
-class GamesTable(MDDataTable):
+class GamesTable(MDDataTable, TouchBehavior):
     """Класс таблицы для отображения записанных в БД игр."""
 
     def __init__(self):
@@ -92,7 +95,7 @@ class GamesTable(MDDataTable):
                           "team_guest": ('Гости',),
                           "status": ('Статус', dp(30))}
 
-        self.showed_data = ["date", "time", "stadium", "status", "referee_chief"]
+        self.showed_data = ["date", "time", "stadium", "status"]
 
         # проверка, если в будущем будет несколько таблиц с заданными показываемыми значениями
         # значения showed_data должны состоять из ключей data_dict
@@ -109,6 +112,20 @@ class GamesTable(MDDataTable):
         super(GamesTable, self).__init__()
 
         self.count_cell_in_row = len(self.column_data)
+
+        self.touched_cell = None
+
+    def on_row_press(self, instance_cell_row):
+        """Necessary for saving touched Cell"""
+        self.touched_cell = instance_cell_row
+
+    def on_long_touch(self, touch, *args):
+        # строка, в которой находится нажатая клетка
+        row_cell = self.touched_cell.index // self.count_cell_in_row
+
+        # игра, записанная в данной строке
+        game = self.list_of_games[row_cell]
+        print(game.status_key)
 
     def _set_column_name_and_size(self, data: str):
         if data in self.data_dict:
@@ -129,14 +146,6 @@ class GamesTable(MDDataTable):
     def update(self):
         """Обновляет таблицу"""
         self.row_data = self._take_games()
-
-    def on_row_press(self, instance_cell_row):
-        # трока, в которой находится нажатая клетка
-        row_cell = instance_cell_row.index // self.count_cell_in_row
-
-        # игра, записанная в данной строке
-        game = self.list_of_games[row_cell]
-        print(game.status_key)
 
     def _take_games(self) -> list:
         """Возвращает преобразованные в табличные значения данные из БД.
@@ -304,7 +313,7 @@ class DropMenu(MDDropdownMenu):
             self.open()
 
 
-class AddDataWindow(MDDialog):
+class DialogWindow(MDDialog):
     def __init__(self, **kwargs):
         """Parameters:
                 type_(str) - тип создаваемого MDDialog. type_ может принимать значения: 
@@ -317,18 +326,21 @@ class AddDataWindow(MDDialog):
 
         title = " ".join(['Add', type_])
 
-        self.auto_dismiss = False
+        self.auto_dismiss = True
         self.title = title
         self.type = "custom"
         self._set_content_cls(type_, **kwargs)
-        self.buttons = [MDFlatButton(text="CANCEL", on_release=self.dismiss),
-                        MDFlatButton(text="ADD", on_release=self._add_button_click)]
+        self.buttons = [MDFlatButton(text="CANCEL", on_release=self.dismiss, theme_text_color="Custom",
+                                     text_color=app.theme_cls.error_color),
+                        MDRaisedButton(text="ADD",
+                                       on_release=self._add_button_click,
+                                       md_bg_color=app.theme_cls.primary_dark)]
 
-        super(AddDataWindow, self).__init__()
+        super(DialogWindow, self).__init__()
 
     def _set_content_cls(self, type_, **kwargs) -> None:
         if type_ == "games":
-            self.content_cls = AddGameContent(**kwargs)
+            self.content_cls = AddGameContent()
         if type_ == "referee":
             self.content_cls = AddRefereeContent(**kwargs)
         if type_ == "stadium":
@@ -349,7 +361,7 @@ class AddDataWindow(MDDialog):
             self.caller_.parent.parent.set_focus()
 
 
-class AddDataContent(RecycleView):
+class DialogContent(RecycleView):
     def __init__(self, **kwargs):
         """Parameters:
                 caller_ (Any) - объект, создавший и вызвавший этот класс.
@@ -360,7 +372,7 @@ class AddDataContent(RecycleView):
         self.caller_ = kwargs.pop('caller_', None)
         self.filled_field = kwargs.pop('filled_field', {})
 
-        super(AddDataContent, self).__init__(**kwargs)
+        super(DialogContent, self).__init__(**kwargs)
 
         self.children_ = []
         self._add_items_in_box(self.items, self.ids.box)
@@ -377,6 +389,9 @@ class AddDataContent(RecycleView):
 
             box (BoxLayout)- контейнер для добавления объектов."""
 
+        # отступ с правой стороны
+        box.padding[2] = 20
+
         for item in items:
             if type(item) == list:
                 self._add_items_in_box(item, box)
@@ -386,10 +401,18 @@ class AddDataContent(RecycleView):
                 type_ = item.setdefault('type', '')
 
                 if class_ == "boxlayout":
-                    box_ = MDBoxLayout(orientation=item.setdefault("orientation", "vertical"),
-                                       spacing=item.setdefault("spacing", 0),
-                                       padding=item.setdefault("padding", 0)
-                                       )
+                    new_box = MDBoxLayout(orientation=item.setdefault("orientation", "vertical"),
+                                          spacing=item.setdefault("spacing", 0),
+                                          padding=item.setdefault("padding", 0)
+                                          )
+                    box.add_widget(new_box)
+                    box = new_box
+
+                elif class_ == "gridlayout":
+                    box_ = MDGridLayout(padding=[0, 10, 0, 0],
+                                        spacing=10,
+                                        rows=item.setdefault("cols", 1),
+                                        cols=item.setdefault("rows", 1))
                     box.add_widget(box_)
                     box = box_
 
@@ -400,18 +423,20 @@ class AddDataContent(RecycleView):
                     box = box_
 
                 elif class_ == "expansionpanel":
-                    box_ = MDGridLayout(adaptive_height=True, cols=1)
+                    box_ = MDGridLayout(padding=[0, 10, 0, 0],
+                                        spacing=10,
+                                        cols=item.setdefault("cols", 1),
+                                        adaptive_height=True)
                     panel = ExpansionPanel(self,
                                            panel_cls=MDExpansionPanelOneLine(text=item.setdefault("panel_text", "")),
-                                           content=box_,
-                                           icon=item.setdefault("icon", ""))
-
+                                           content=box_)
                     box.add_widget(panel)
                     box = box_
 
                 elif class_ == "textfield":
                     # заполняет уже имеющиеся данные в строке, если есть
                     text = self.filled_field.pop(item['data_key'], '')
+
                     self._add_textfield(type_, box, parent_=self, instruction=item, text=text)
 
                 elif class_ == "checkbox":
@@ -421,8 +446,10 @@ class AddDataContent(RecycleView):
                     self._add_label(item, box)
 
     def _add_textfield(self, type_, box, **kwargs):
-        if type_ == 'date_and_time':
-            self._add_widget(DateAndTimeTF(**kwargs), box)
+        if type_ == 'date':
+            self._add_widget(DateTF(**kwargs), box)
+        elif type_ == 'time':
+            self._add_widget(TimeTF(**kwargs), box)
         elif type_ == 'phone':
             self._add_widget(PhoneTF(**kwargs), box)
         elif type_ == 'age':
@@ -455,21 +482,29 @@ class AddDataContent(RecycleView):
 
     def _get_height(self):
         """Устанавливает высоту Content в зависимости от количества items."""
-        height = len(self.items) * 55
-
-        if height > 300:
-            height = 300
-
+        height = len(self.items) * 70
+        height = 1000 if height > 1000 else height
         return dp(height)
 
     def _get_box_height(self):
         """Устанавливает высоту BoxLayout в зависимости от количества items и их заданной высоты."""
         # высота item, если она не указана
         self.default_item_height = 62
+        self.default_box_height = self._get_items_height(len(self.items))
 
-        height = self._get_items_height(self.items)
+        return dp(self.default_box_height)
 
-        return dp(height)
+    def increase_box_height(self, count_items: int):
+        self.ids.box.height += self._get_items_height(count_items)
+
+    def reduce_box_height(self, count_items: int):
+        self.ids.box.height -= self._get_items_height(count_items)
+
+    def set_default_box_height(self):
+        self.ids.box.height = self.default_box_height
+
+    def _get_items_height(self, count_items: int):
+        return self.default_item_height * count_items
 
     def increase_box_height(self, items: List[Union[list, dict]]):
         self.ids.box.height += self._get_items_height(items)
@@ -519,12 +554,12 @@ class AddDataContent(RecycleView):
 
         DB.insert(self.data_table, data)
 
-        # self.parent - BoxLayout, self.parent.parent - MDCard, self.parent.parent.parent - AddDataWindow
+        # self.parent - BoxLayout, self.parent.parent - MDCard, self.parent.parent.parent - DialogWindow
         self.parent.parent.parent.dismiss()
 
         if not self.caller_:
             open_dialog("Successfully added")
-            main.app_screen.table_games.update()
+            app.app_screen.table_games.update()
 
         else:
             self.caller_.text = caller_field_text.strip()
@@ -605,65 +640,75 @@ class AddDataContent(RecycleView):
                     widgets[inx + 1]
                 except IndexError:
                     continue
-                if not widgets[inx + 1].text:
+
+                if not widgets[inx + 1].text and widgets[inx + 1].visible:
                     next_widget = widgets[inx + 1]
                     next_widget.focus = True
                     self.scroll_to(next_widget)
 
 
-class AddGameContent(AddDataContent):
-    def __init__(self, **kwargs):
+class AddGameContent(DialogContent):
+    def __init__(self):
         self.data_table = "games"
         self.items = [
             [
                 {'class': 'boxlayout', 'orientation': 'horizontal', 'spacing': 10},
-                {'class': 'checkbox', 'data_key': 'game_passed', 'size_hint_x': 0.1},
-                {'class': 'label', 'text': 'Game passed', 'size_hint_x': 0.2},
-                {'class': 'label', 'text': '', 'size_hint_x': 0.5},
-                {'class': 'textfield', 'type': 'payment', 'name': 'Payment', 'data_key': 'payment', 'size_hint_x': 0.5}
-            ],
-            {'name': 'Stadium', 'class': 'textfield', 'type': 'with_dropmenu', 'what_fields_child_fill': ['name'],
-             'data_table': 'stadium', 'data_key': 'stadium_id', 'notnull': True, 'height_dp': 90},
-            {'name': 'Data and Time', 'class': 'textfield', 'type': 'date_and_time', 'data_key': 'date_and_time',
-             'notnull': True},
-            {'name': 'League', 'class': 'textfield', 'type': 'with_dropmenu', 'what_fields_child_fill': ['name'],
-             'data_table': 'league', 'data_key': 'league_id', 'notnull': True},
-            [
-                {'class': 'boxlayout', 'orientation': 'horizontal', 'spacing': 10},
-                {'name': 'Home team', 'class': 'textfield', 'type': 'with_dropmenu', 'what_fields_child_fill': ['name'],
-                 'data_table': 'team', 'data_key': 'team_home', 'notnull': True},
-                {'name': 'Year home team', 'class': 'textfield', 'type': 'age', 'data_key': 'team_home_year',
-                 'size_hint_x': 0.35},
-            ],
-            [
-                {'class': 'boxlayout', 'orientation': 'horizontal', 'spacing': 10},
-                {'name': 'Guest team', 'class': 'textfield', 'type': 'with_dropmenu',
-                 'what_fields_child_fill': ['name'],
-                 'data_table': 'team', 'data_key': 'team_guest', 'notnull': True},
-                {'name': 'Year guest team', 'class': 'textfield', 'type': 'age', 'data_key': 'team_guest_year',
-                 'size_hint_x': 0.35}
+                {'name': 'Date', 'class': 'textfield', 'type': 'date', 'data_key': 'date',
+                 'notnull': True, 'size_hint_x': 0.5},
+                {'name': 'Time', 'class': 'textfield', 'type': 'time', 'data_key': 'time',
+                 'notnull': True, 'size_hint_x': 0.5},
+                {'name': 'Stadium', 'class': 'textfield', 'type': 'with_dropmenu', 'what_fields_child_fill': ['name'],
+                 'data_table': 'stadium', 'data_key': 'stadium_id', 'notnull': True},
             ],
             {'name': 'Chief referee', 'class': 'textfield', 'type': 'with_dropmenu',
              'what_fields_child_fill': ['second_name', 'first_name', 'third_name'],
              'data_table': 'referee', 'data_key': 'referee_chief', 'notnull': True},
             [
+                {'class': 'expansionpanel', 'panel_text': 'Team', 'cols': 2},
+                [
+                    {'name': 'Home team', 'class': 'textfield', 'type': 'with_dropmenu',
+                     'what_fields_child_fill': ['name'],
+                     'data_table': 'team', 'data_key': 'team_home'},
+                    {'name': 'Year home team', 'class': 'textfield', 'type': 'age', 'data_key': 'team_home_year',
+                     'size_hint_x': 0.35},
+
+                ],
+                [
+                    {'name': 'Guest team', 'class': 'textfield', 'type': 'with_dropmenu',
+                     'what_fields_child_fill': ['name'],
+                     'data_table': 'team', 'data_key': 'team_guest'},
+                    {'name': 'Year guest team', 'class': 'textfield', 'type': 'age', 'data_key': 'team_guest_year',
+                     'size_hint_x': 0.35}
+                ],
+                {'name': 'League', 'class': 'textfield', 'type': 'with_dropmenu', 'size_hint_x': 0.8,
+                 'what_fields_child_fill': ['name'],
+                 'data_table': 'league', 'data_key': 'league_id'},
+            ],
+            [
                 {'class': 'expansionpanel', 'panel_text': 'Referee'},
                 {'name': 'First referee', 'class': 'textfield', 'type': 'with_dropmenu',
                  'what_fields_child_fill': ['second_name', 'first_name', 'third_name'],
-                 'data_table': 'referee', 'data_key': 'referee_first'},
+                 'data_table': 'referee', 'data_key': 'referee_first', 'visible': False},
                 {'name': 'Second referee', 'class': 'textfield', 'type': 'with_dropmenu',
                  'what_fields_child_fill': ['second_name', 'first_name', 'third_name'],
-                 'data_table': 'referee', 'data_key': 'referee_second'},
+                 'data_table': 'referee', 'data_key': 'referee_second', 'visible': False},
                 {'name': 'Reserve referee', 'class': 'textfield', 'type': 'with_dropmenu',
                  'what_fields_child_fill': ['second_name', 'first_name', 'third_name'],
-                 'data_table': 'referee', 'data_key': 'referee_reserve'}
-            ]
+                 'data_table': 'referee', 'data_key': 'referee_reserve', 'visible': False}
+            ],
+            [
+                {'class': 'boxlayout', 'orientation': 'horizontal', 'spacing': 10},
+                {'class': 'checkbox', 'data_key': 'game_passed', 'size_hint_x': 0.1},
+                {'class': 'label', 'text': 'Game passed', 'size_hint_x': 0.2},
+                {'class': 'label', 'text': '', 'size_hint_x': 0.19},
+                {'class': 'textfield', 'type': 'payment', 'name': 'Payment', 'data_key': 'payment', 'size_hint_x': 0.5}
+            ],
         ]
 
-        super(AddGameContent, self).__init__(**kwargs)
+        super(AddGameContent, self).__init__()
 
 
-class AddRefereeContent(AddDataContent):
+class AddRefereeContent(DialogContent):
     def __init__(self, **kwargs):
         self.data_table = "referee"
         self.items = [
@@ -680,7 +725,7 @@ class AddRefereeContent(AddDataContent):
         super(AddRefereeContent, self).__init__(**kwargs)
 
 
-class AddStadiumContent(AddDataContent):
+class AddStadiumContent(DialogContent):
     def __init__(self, **kwargs):
         self.data_table = "stadium"
         self.items = [
@@ -693,7 +738,7 @@ class AddStadiumContent(AddDataContent):
         super(AddStadiumContent, self).__init__(**kwargs)
 
 
-class AddLeagueContent(AddDataContent):
+class AddLeagueContent(DialogContent):
     def __init__(self, **kwargs):
         self.data_table = "league"
         self.items = [
@@ -702,7 +747,7 @@ class AddLeagueContent(AddDataContent):
         super(AddLeagueContent, self).__init__(**kwargs)
 
 
-class AddTeamContent(AddDataContent):
+class AddTeamContent(DialogContent):
     def __init__(self, **kwargs):
         self.data_table = "team"
         self.items = [
@@ -711,7 +756,7 @@ class AddTeamContent(AddDataContent):
         super(AddTeamContent, self).__init__(**kwargs)
 
 
-class AddCategoryContent(AddDataContent):
+class AddCategoryContent(DialogContent):
     def __init__(self, **kwargs):
         self.data_table = "category"
         self.items = [
@@ -720,7 +765,7 @@ class AddCategoryContent(AddDataContent):
         super(AddCategoryContent, self).__init__(**kwargs)
 
 
-class AddCityContent(AddDataContent):
+class AddCityContent(DialogContent):
     def __init__(self, **kwargs):
         self.data_table = "city"
         self.items = [
@@ -732,27 +777,38 @@ class AddCityContent(AddDataContent):
 class ExpansionPanel(MDExpansionPanel):
     def __init__(self, parent, **kwargs):
         self.parent_ = parent
-
         super(ExpansionPanel, self).__init__(**kwargs)
 
+    @property
+    def content_columns(self):
+        return ceil(len(self.content.children) / self.content.cols)
+
     def on_open(self):
-        self.parent_.increase_box_height(self.get_widgets_height(self.content.children))
+        self.parent_.increase_box_height(self.content_columns)
+        self.set_children_visible()
 
     def on_close(self):
-        self.parent_.reduce_box_height(self.get_widgets_height(self.content.children))
+        self.parent_.set_default_box_height()
+        self.set_children_invisible()
 
-    def get_widgets_height(self, widgets):
-        list_child_height_dp = []
-        for child in widgets:
-            child_height_dp = getattr(child, "height_dp", None)
-            list_child_height_dp.append({"height_dp": child_height_dp} if child_height_dp else {})
+    def set_children_visible(self):
+        for child in self.content.children:
+            child.visible = True
 
-        return list_child_height_dp
+    def set_children_invisible(self):
+        for child in self.content.children:
+            child.visible = True
+
+    def set_child_focus(self, inx_child: int):
+        self.content.children[inx_child].focus = True
+
+    def _set_first_child_focus(self, dp=None):
+        self.set_child_focus(-1)
 
 
 class TextField(MDTextField):
     def __init__(self, **kwargs):
-        self.parent_ = kwargs.pop('parent_')
+        self.parent_dialog = kwargs.pop('parent_')
         text = kwargs.pop('text')
         instr = kwargs.pop('instruction')
         self.size_hint_x = instr.setdefault('size_hint_x', 1)
@@ -773,6 +829,8 @@ class TextField(MDTextField):
         self.have_drop_menu = False
         self.change_focus = False
 
+        self.visible = instr.setdefault("visible", True)
+
     def on_focus_(self):
         pass
 
@@ -789,7 +847,7 @@ class TextField(MDTextField):
 
     def set_next_focus(self):
         if self.change_focus:
-            self.parent_.set_next_focus(self)
+            self.parent_dialog.set_next_focus(self)
 
 
 class TFWithoutDrop(TextField):
@@ -852,9 +910,9 @@ class PhoneTF(TFWithoutDrop):
         super(PhoneTF, self).on_text_validate()
 
 
-class DateAndTimeTF(TFWithoutDrop):
+class DateTF(TFWithoutDrop):
     def __init__(self, **kwargs):
-        super(DateAndTimeTF, self).__init__(**kwargs)
+        super(DateTF, self).__init__(**kwargs)
 
         self.helper_text = "dd.mm.yyyy HH:MM"
         self.helper_text_mode = "persistent"
@@ -864,32 +922,64 @@ class DateAndTimeTF(TFWithoutDrop):
         substring = re.sub('[^0-9]', '', substring)
         if cursor in [1, 4]:
             substring += "."
-        elif cursor == 9:
-            substring += " "
-        elif cursor == 12:
-            substring += ":"
-        elif cursor > 15:
-            substring = ''
-        return super(DateAndTimeTF, self).insert_text(substring, from_undo=from_undo)
+        elif cursor > 9:
+            substring = ""
+        return super(DateTF, self).insert_text(substring, from_undo=from_undo)
 
     def do_backspace(self, from_undo=False, mode='bkspc'):
         cursor = self.cursor_col
         doble_bkspc = False
-        if cursor in [3, 6, 11, 14, 17]:
-            # стираем символ два раза, чтобы удалить еще и разделяющий символ (. или :)
+        if cursor in [3, 6, 11]:
+            # стираем символ два раза, чтобы удалить разделяющий символ .
             doble_bkspc = True
 
         if doble_bkspc:
-            super(DateAndTimeTF, self).do_backspace(from_undo=from_undo, mode='bkspc')
-        super(DateAndTimeTF, self).do_backspace(from_undo=from_undo, mode='bkspc')
+            super(DateTF, self).do_backspace(from_undo=from_undo, mode='bkspc')
+        super(DateTF, self).do_backspace(from_undo=from_undo, mode='bkspc')
 
     def on_text_validate(self):
-        pat = "^(0?[1-9]|[12][0-9]|3[01]).(0?[0-9]|1[012]).(19|20)?[0-9]{2} ([01][1-9]|2[0-4]):[0-6][0-9]$"
+        pat = "^(0?[1-9]|[12][0-9]|3[01]).(0?[0-9]|1[012]).(19|20)?[0-9]{2}$"
 
         if not re.match(pat, self.text):
             self.text = ""
 
-        super(DateAndTimeTF, self).on_text_validate()
+        super(DateTF, self).on_text_validate()
+
+
+class TimeTF(TFWithoutDrop):
+    def __init__(self, **kwargs):
+        super(TimeTF, self).__init__(**kwargs)
+
+        self.helper_text = "HH:MM"
+        self.helper_text_mode = "persistent"
+
+    def insert_text(self, substring, from_undo=False):
+        cursor = self.cursor_col
+        substring = re.sub('[^0-9]', '', substring)
+        if cursor == 1:
+            substring += ":"
+        elif cursor > 4:
+            substring = ''
+        return super(TimeTF, self).insert_text(substring, from_undo=from_undo)
+
+    def do_backspace(self, from_undo=False, mode='bkspc'):
+        cursor = self.cursor_col
+        doble_bkspc = False
+        if cursor == 3:
+            # стираем символ два раза, чтобы разделяющий символ :
+            doble_bkspc = True
+
+        if doble_bkspc:
+            super(TimeTF, self).do_backspace(from_undo=from_undo, mode='bkspc')
+        super(TimeTF, self).do_backspace(from_undo=from_undo, mode='bkspc')
+
+    def on_text_validate(self):
+        pat = "^([01][1-9]|2[0-4]):[0-6][0-9]$"
+
+        if not re.match(pat, self.text):
+            self.text = ""
+
+        super(TimeTF, self).on_text_validate()
 
 
 class YearTF(TFWithoutDrop):
@@ -926,7 +1016,6 @@ class PaymentTF(TFWithoutDrop):
 class TFWithDrop(TextField):
     def __init__(self, **kwargs):
         super(TFWithDrop, self).__init__(**kwargs)
-
         self.have_drop_menu = True
 
         self.drop_menu = DropMenu()
@@ -1019,7 +1108,7 @@ class TFWithDrop(TextField):
 
     def _drop_menu_add_data(self, filled_fields=None):
         """Создает Dialog для добавления новых данных в БД."""
-        self.add_data_dialog = AddDataWindow(type_=self.data_table, filled_field=filled_fields, caller_=self)
+        self.add_data_dialog = DialogWindow(type_=self.data_table, filled_field=filled_fields, caller_=self)
         self.add_data_dialog.open()
 
 
@@ -1028,6 +1117,7 @@ class GamePassedCheck(CheckBox):
         instr = kwargs.pop('instruction')
         self.size_hint_x = instr.setdefault('size_hint_x', 1)
         self.data_key = instr.setdefault('data_key')
+        self.color = app.theme_cls.accent_color
 
         super(GamePassedCheck, self).__init__()
 
@@ -1035,6 +1125,10 @@ class GamePassedCheck(CheckBox):
 class MainApp(MDApp):
     def build(self):
         self.theme_cls.primary_palette = "Orange"
+        self.theme_cls.primary_hue = "500"
+        self.theme_cls.primary_darkhue = "900"
+        self.theme_cls.primary_lighthue = "300"
+
         self.theme_cls.theme_style = "Dark"
 
         self.app_screen = AppScreen()
@@ -1043,6 +1137,6 @@ class MainApp(MDApp):
 
 
 if __name__ == "__main__":
-    main = MainApp()
+    app = MainApp()
     DB = ConnDB()
-    main.run()
+    app.run()
