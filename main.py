@@ -1,4 +1,5 @@
 import re
+from abc import ABC
 from math import ceil
 
 from typing import Optional, Any, Union, List, Tuple
@@ -49,36 +50,34 @@ class AppScreen(BoxLayout):
         super().__init__(**kwargs)
 
         self.add_game_dialog = ObjectProperty()
+        self.games_screen = GameScreen(self.ids.games_box)
 
+    def add_float_button_callback(self) -> None:
+        """Вызывается при нажатии на MDFloatingActionButton."""
+        self.games_screen.pop_dialog_add_game()
+
+    def menu_settings(self):
+        print("menu")
+
+
+class GameScreen:
+    def __init__(self, box):
+        self.add_game_dialog = ObjectProperty()
+
+        self.box = box
         self.table_games = GamesTable()
 
         # при первом включении необходимо показать контент
         self._create_main_page()
-
-    def _create_main_page(self) -> None:
-        self.games_layout.clear_widgets()
-        self.games_layout.add_widget(self.table_games)
-
-    def add_button_callback(self) -> None:
-        """Вызывается при нажатии на MDFloatingActionButton.
-         Открывает окно добавления новой игры."""
-        self.pop_dialog_add_game()
 
     def pop_dialog_add_game(self) -> None:
         """Открывает Dialog для добавления новой игры."""
         self.add_game_dialog = DialogWindow(type_="games")
         self.add_game_dialog.open()
 
-    def menu_settings(self):
-        print("menu")
-
-    def update_db(self, event) -> None:
-        """Вызывается при нажатии на кнопку ADD."""
-        self.add_game_dialog.content_cls.update_db()
-
-    def dismiss_dialog(self, event) -> None:
-        """Закрывает Dialog."""
-        self.add_game_dialog.dismiss()
+    def _create_main_page(self) -> None:
+        self.box.clear_widgets()
+        self.box.add_widget(self.table_games)
 
 
 class GamesTable(MDDataTable, TouchBehavior):
@@ -95,7 +94,8 @@ class GamesTable(MDDataTable, TouchBehavior):
                           "team_guest": ('Гости',),
                           "status": ('Статус', dp(30))}
 
-        self.showed_data = ["date", "time", "stadium", "status"]
+        # !!!!!!!!!!!!!!!! разобраться со status
+        self.showed_data = ["date", "time", "stadium"]
 
         # проверка, если в будущем будет несколько таблиц с заданными показываемыми значениями
         # значения showed_data должны состоять из ключей data_dict
@@ -120,12 +120,13 @@ class GamesTable(MDDataTable, TouchBehavior):
         self.touched_cell = instance_cell_row
 
     def on_long_touch(self, touch, *args):
-        # строка, в которой находится нажатая клетка
-        row_cell = self.touched_cell.index // self.count_cell_in_row
+        if self.list_of_games:  # без этой проверки при отсутствии игр вылетает ошибка
+            # строка, в которой находится нажатая клетка
+            row_cell = self.touched_cell.index // self.count_cell_in_row
 
-        # игра, записанная в данной строке
-        game = self.list_of_games[row_cell]
-        print(game.status_key)
+            # игра, записанная в данной строке
+            game = self.list_of_games[row_cell]
+            print(game.status_key)
 
     def _set_column_name_and_size(self, data: str):
         if data in self.data_dict:
@@ -153,7 +154,7 @@ class GamesTable(MDDataTable, TouchBehavior):
             Return:
                 list_of_games(list) - список игр, взятых из БД."""
 
-        games = DB.take_games()
+        games = DB.take_games(self.showed_data)
         self.list_of_games = []
         return_list = []
         for game_info in games:
@@ -185,9 +186,9 @@ class Game:
                  "status",
                  ]
 
-    def __init__(self, id_in_db: int, league: str, year: int, month: int, day: int, time_: int,
-                 stadium: str, team_home: str, team_guest: str,
-                 game_passed: Optional[int], pay_done: Optional[int], payment: int):
+    def __init__(self, id_in_db: int, year: int, month: int, day: int, time_: int,
+                 stadium: str = None, league: str = None, team_home: str = None, team_guest: str = None,
+                 game_passed: Optional[int] = None, pay_done: Optional[int] = None, payment: int = None):
         self.id_in_db = id_in_db
         self.league = league
         self.date = self._date_list_in_str(year, month, day)
@@ -338,6 +339,12 @@ class DialogWindow(MDDialog):
 
         super(DialogWindow, self).__init__()
 
+    def _add_button_click(self, event) -> None:
+        """Вызывается при нажатии кнопки ADD"""
+        success = self.content_cls.update_db()
+        if success and self.caller_:
+            self.caller_.parent.parent.set_focus()
+
     def _set_content_cls(self, type_, **kwargs) -> None:
         if type_ == "games":
             self.content_cls = AddGameContent()
@@ -353,12 +360,6 @@ class DialogWindow(MDDialog):
             self.content_cls = AddCityContent(**kwargs)
         if type_ == "team":
             self.content_cls = AddTeamContent(**kwargs)
-
-    def _add_button_click(self, event) -> None:
-        """Вызывается при нажатии кнопки ADD"""
-        success = self.content_cls.update_db()
-        if success and self.caller_:
-            self.caller_.parent.parent.set_focus()
 
 
 class DialogContent(RecycleView):
@@ -397,6 +398,9 @@ class DialogContent(RecycleView):
                 self._add_items_in_box(item, box)
 
             elif type(item) == dict:
+                if type(box) is ExpansionGridLayout:
+                    item.setdefault('visible', False)
+
                 class_ = item.setdefault('class', '')
                 type_ = item.setdefault('type', '')
 
@@ -423,10 +427,10 @@ class DialogContent(RecycleView):
                     box = box_
 
                 elif class_ == "expansionpanel":
-                    box_ = MDGridLayout(padding=[0, 10, 0, 0],
-                                        spacing=10,
-                                        cols=item.setdefault("cols", 1),
-                                        adaptive_height=True)
+                    box_ = ExpansionGridLayout(padding=[0, 10, 0, 0],
+                                               spacing=10,
+                                               cols=item.setdefault("cols", 1),
+                                               adaptive_height=True)
                     panel = ExpansionPanel(self,
                                            panel_cls=MDExpansionPanelOneLine(text=item.setdefault("panel_text", "")),
                                            content=box_)
@@ -542,7 +546,7 @@ class DialogContent(RecycleView):
 
         if not self.caller_:
             open_dialog("Successfully added")
-            app.app_screen.table_games.update()
+            app.app_screen.games_screen.table_games.update()
 
         else:
             self.caller_.text = caller_field_text.strip()
@@ -616,19 +620,22 @@ class DialogContent(RecycleView):
     def set_next_focus(self, previous_widget):
         """Устанавливает фокус на слудующем виджете, если он не заполнен."""
         widgets = self.children_
+        start_inx = widgets.index(previous_widget)
 
-        for inx, widget in enumerate(widgets):
-            if widget is previous_widget:
-                try:
-                    widgets[inx + 1]
-                except IndexError:
-                    continue
+        for inx, widget in enumerate(widgets[start_inx:]):
+            inx += start_inx
 
-                if not widgets[inx + 1].text and widgets[inx + 1].visible:
-                    next_widget = widgets[inx + 1]
-                    next_widget.focus = True
-                    self.scroll_to(next_widget)
-                    break
+            try:
+                widgets[inx + 1]
+            except IndexError:
+                continue
+
+            if issubclass(widgets[inx + 1].__class__, TextField)\
+                    and widgets[inx + 1].visible and not widgets[inx + 1].text:
+                next_widget = widgets[inx + 1]
+                next_widget.focus = True
+                self.scroll_to(next_widget)
+                break
 
 
 class AddGameContent(DialogContent):
@@ -672,13 +679,13 @@ class AddGameContent(DialogContent):
                 {'class': 'expansionpanel', 'panel_text': 'Referee'},
                 {'name': 'First referee', 'class': 'textfield', 'type': 'with_dropmenu',
                  'what_fields_child_fill': ['second_name', 'first_name', 'third_name'],
-                 'data_table': 'referee', 'data_key': 'referee_first', 'visible': False},
+                 'data_table': 'referee', 'data_key': 'referee_first'},
                 {'name': 'Second referee', 'class': 'textfield', 'type': 'with_dropmenu',
                  'what_fields_child_fill': ['second_name', 'first_name', 'third_name'],
-                 'data_table': 'referee', 'data_key': 'referee_second', 'visible': False},
+                 'data_table': 'referee', 'data_key': 'referee_second'},
                 {'name': 'Reserve referee', 'class': 'textfield', 'type': 'with_dropmenu',
                  'what_fields_child_fill': ['second_name', 'first_name', 'third_name'],
-                 'data_table': 'referee', 'data_key': 'referee_reserve', 'visible': False}
+                 'data_table': 'referee', 'data_key': 'referee_reserve'}
             ],
             [
                 {'class': 'boxlayout', 'orientation': 'horizontal', 'spacing': 10},
@@ -769,6 +776,7 @@ class ExpansionPanel(MDExpansionPanel):
     def on_open(self):
         self.parent_.increase_box_height(self.content_columns)
         self.set_children_visible()
+        print(self.content.children[0].visible)
 
     def on_close(self):
         self.parent_.set_default_box_height()
@@ -780,13 +788,15 @@ class ExpansionPanel(MDExpansionPanel):
 
     def set_children_invisible(self):
         for child in self.content.children:
-            child.visible = True
+            child.visible = False
 
     def set_child_focus(self, inx_child: int):
         self.content.children[inx_child].focus = True
 
-    def _set_first_child_focus(self, dp=None):
-        self.set_child_focus(-1)
+
+class ExpansionGridLayout(MDGridLayout):
+    def __init__(self, **kwargs):
+        super(ExpansionGridLayout, self).__init__(**kwargs)
 
 
 class TextField(MDTextField):

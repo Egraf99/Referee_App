@@ -1,6 +1,4 @@
 <AppScreen>:
-    games_layout: games_layout
-
     MDBoxLayout:
         orientation: 'vertical'
         MDToolbar:
@@ -14,21 +12,20 @@
             first_widget: True
 
             MDBottomNavigationItem:
-                id: games_screen
                 name: 'main'
                 text: 'Games'
                 icon: 'whistle'
 
 
                 BoxLayout:
-                    id: games_layout
+                    id: games_box
 
                 MDFloatingActionButton:
                     rotation_root_button: True
                     pos_hint: {'center_x': .93, 'center_y': .1}
                     icon: 'plus'
                     md_bg_color: app.theme_cls.primary_color
-                    on_press: root.add_button_callback()
+                    on_press: root.add_float_button_callback()
 
             MDBottomNavigationItem:
                 name: 'finance'

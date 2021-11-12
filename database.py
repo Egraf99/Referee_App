@@ -3,17 +3,42 @@ from typing import Optional
 
 
 class ConnDB:
-    def take_games(self) -> list:
-        sql = '''SELECT games.id, league.name, year, month, day,
-                        time, stadium.name, th.name, tg.name,
-                        game_passed, pay_done, payment
-                   FROM Games 
-                        INNER JOIN League ON Games.league_id = League.id
-                        INNER JOIN Stadium ON Games.stadium_id = Stadium.id
-                        INNER JOIN Team AS th ON Games.team_home = th.id
-                        INNER JOIN Team AS tg ON Games.team_guest = tg.id
-                  ORDER BY day, month, year ASC, time DESC'''
+    def take_games(self, name_data: list) -> list:
+        data_with_id = ["id"]
+        data_with_name = ["league", "stadium", "team_home", "team_guest"]
+        data_with_full_name = ["referee_chief", "referee_first", "referee_second", "referee_reserve"]
+        another_name_data = {"date": ["day", "month", "year"]}
+        data_from_table = {"league": "League", "stadium": "Stadium", "team_home": "Team", "team_guest": "Team",
+                           "referee_chief": "Referee", "referee_first": "Referee", "referee_second": "Referee", "referee_reserve": "Referee"}
+        table_with_several_data = ["Referee", "Team"]
 
+        inner_join = ""
+
+        for inx, name in enumerate(name_data):
+            i = 0
+            if name in data_from_table.keys():
+                table = data_from_table[name]
+                if table in table_with_several_data:
+                    inner_join += f"INNER JOIN {table} AS {i} ON Games.{name} = {i}.id\n"
+                    i += 1
+                else:
+                    inner_join += f"INNER JOIN {table} ON Games.{name}_id = {table}.id"
+
+            if name in data_with_id:
+                name_data[inx] = f"{name}.id"
+            elif name in data_with_name:
+                name_data[inx] = f"{name}.name"
+            elif name in data_with_full_name:
+                name_data[inx] = f"{name}.first_name||' '||{name}.second_name||' '||{name}.third_name"
+            elif name in another_name_data.keys():
+                name_data[inx] = ", ".join(another_name_data[name])
+
+        print(name_data)
+
+        sql = f'''SELECT {", ".join(name_data)}
+                   FROM Games {inner_join}'''
+
+        print(sql)
         return self.select_request(sql)
 
     def take_data(self, what_return: str, table: str,
@@ -51,21 +76,23 @@ class ConnDB:
 
         print(sql, values)
 
-        # self.insert_request(sql, values)
+        self.insert_request(sql, values)
 
     @staticmethod
     def _convert_special_date(data: dict) -> None:
         """Преаобразует специальные поля (дата, время, телефон) в формат значений БД."""
         if "date" in data.keys():
             date = data.pop("date").split(" ")
-            day, month, year = date[0].split(".")
+            day, month, year = map(lambda d: int(d), date[0].split("."))
 
             _data = {'day': day, 'month': month, 'year': year}
             for i in _data:
                 data[i] = _data[i]
 
         if "time" in data.keys():
-            data["time"].replace(":", "")
+            time = data.pop("time")
+            time = int(time.replace(":", ""))
+            data["time"] = time
 
         if "phone" in data.keys():
             # в телефоне оставляем только числа
