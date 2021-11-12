@@ -1,4 +1,6 @@
 import re
+import datetime
+from copy import deepcopy
 from abc import ABC
 from math import ceil
 
@@ -14,6 +16,7 @@ from kivy.uix.scrollview import ScrollView
 from kivy.properties import ObjectProperty
 from kivy.metrics import dp
 
+from kivy.utils import get_color_from_hex
 from kivymd.color_definitions import colors
 from kivymd.uix.expansionpanel import MDExpansionPanel, MDExpansionPanelOneLine
 from kivymd.uix.boxlayout import MDBoxLayout
@@ -94,13 +97,14 @@ class GamesTable(MDDataTable, TouchBehavior):
                           "team_guest": ('Гости',),
                           "status": ('Статус', dp(30))}
 
-        # !!!!!!!!!!!!!!!! разобраться со status
-        self.showed_data = ["date", "time", "stadium"]
+        self.showed_data = ["date", "time", "stadium", "league", "status", "referee_chief", "team_home", "team_guest"]
 
         # проверка, если в будущем будет несколько таблиц с заданными показываемыми значениями
         # значения showed_data должны состоять из ключей data_dict
         assert all(map(lambda data: data in Game.attribute, self.showed_data)), "" \
                                                                                 f"showed_data might be in {Game.attribute}"
+        # копируем, чтобы при преобразовании имен данных для поиска в БД не изменять показываемые в таблицке дынные
+        self.data_for_db = deepcopy(self.showed_data)
 
         self.elevation = 100
         self.rows_num = 10
@@ -113,20 +117,20 @@ class GamesTable(MDDataTable, TouchBehavior):
 
         self.count_cell_in_row = len(self.column_data)
 
-        self.touched_cell = None
+    #    self.touched_cell = None
 
-    def on_row_press(self, instance_cell_row):
-        """Necessary for saving touched Cell"""
-        self.touched_cell = instance_cell_row
-
-    def on_long_touch(self, touch, *args):
-        if self.list_of_games:  # без этой проверки при отсутствии игр вылетает ошибка
-            # строка, в которой находится нажатая клетка
-            row_cell = self.touched_cell.index // self.count_cell_in_row
-
-            # игра, записанная в данной строке
-            game = self.list_of_games[row_cell]
-            print(game.status_key)
+    # def on_row_press(self, instance_cell_row):
+    #     """Necessary for saving touched Cell"""
+    #     self.touched_cell = instance_cell_row
+    #
+    # def on_long_touch(self, touch, *args):
+    #     if self.list_of_games:  # без этой проверки при отсутствии игр вылетает ошибка
+    #         # строка, в которой находится нажатая клетка
+    #         row_cell = self.touched_cell.index // self.count_cell_in_row
+    #
+    #         # игра, записанная в данной строке
+    #         game = self.list_of_games[row_cell]
+    #         print(game.status_key)
 
     def _set_column_name_and_size(self, data: str):
         if data in self.data_dict:
@@ -149,29 +153,87 @@ class GamesTable(MDDataTable, TouchBehavior):
         self.row_data = self._take_games()
 
     def _take_games(self) -> list:
-        """Возвращает преобразованные в табличные значения данные из БД.
-
-            Return:
-                list_of_games(list) - список игр, взятых из БД."""
-
-        games = DB.take_games(self.showed_data)
+        """Возвращает преобразованные в табличные значения данные из БД."""
+        games = DB.games
+        return_table_data = []
         self.list_of_games = []
-        return_list = []
+
         for game_info in games:
-            game = Game(*game_info)
-
+            game = Game(**game_info)
+            return_table_data.append(self._return_name_data_for_table(game))
             self.list_of_games.append(game)
-            return_list.append(list(map(lambda data: getattr(game, data), self.showed_data)))
 
-        return return_list
+        return return_table_data
+
+    def _return_name_data_for_table(self, game):
+        returned_list_of_data = []
+
+        for name_data in self.showed_data:
+            if name_data == "date":
+                data_str = game.date.strftime("%d.%m.%Y")
+            elif name_data == "time":
+                data_str = game.date.strftime("%H:%M")
+
+            elif name_data in ["league", "stadium"]:
+                ls = getattr(game, name_data)
+                data_str = take_one_data("name", name_data.title(), {"id": ls.id}) if ls else ""
+
+            elif name_data in ["referee_chief", "referee_first", "referee_second", "referee_reserve"]:
+                referee = getattr(game, name_data, None)
+                data_str = referee.second_name if referee else ""
+
+            elif name_data in ["team_home", "team_guest"]:
+                team = getattr(game, name_data)
+                data_str = take_one_data("name", "Team", {"id": team.id}) if team else ""
+
+            elif name_data == "status":
+                data_str = game.status
+
+            else:
+                game_attr = getattr(game, name_data, None)
+                data_str = game_attr if game_attr else ""
+
+            returned_list_of_data.append(data_str)
+
+        return returned_list_of_data
+
+
+def take_one_data(data_name: str, table: str, condition: dict = None):
+    name = DB.take_data(data_name, table, condition, one_value=True)
+    return name[0] if name and name[0] else None
+
+
+def take_many_data(data_name: str, table: str, condition: dict = None):
+    return DB.take_data(data_name, table, condition)
+
+
+def take_name_from_db(table: str) -> list:
+    """Возвращает значение из БД с помощью функций класса DB.
+
+    Parameters:
+        table (str) - из какой таблицы брать значения. В классе DB должен быть метод take_{mode}.
+
+    Return:
+        data (list) - список полученных имен из БД."""
+
+    try:
+        if table == "referee":
+            data = take_many_data("second_name||' '||first_name", table)
+        else:
+            data = take_many_data("name", table)
+
+        return data
+
+    except AttributeError:
+        raise AttributeError(f"ConnDB has no table '{table}'")
 
 
 class Game:
     """Класс, определяющий игру из БД."""
     # dict of status icon, color, name
     status_icn = {"not_passed": ("calendar-alert", colors["Yellow"]["800"], "Не проведена"),
-                  "passed": ("calendar-check", colors["Green"]["300"], "Проведена"),
-                  "pay_done": ("calendar-check", colors["Green"]["500"], "Оплачено")}
+                  "passed": ("calendar-check", colors["LightGreen"]["400"], "Проведена"),
+                  "pay_done": ("calendar-check", colors["Green"]["700"], "Оплачено")}
     # list future attribute
     attribute = ["id_in_db",
                  "league", "date", "time", "stadium",
@@ -183,63 +245,52 @@ class Game:
                  "referee_reserve", "game_passed",
                  "pay_done",
                  "payment",
-                 "status",
-                 ]
+                 "status"]
 
-    def __init__(self, id_in_db: int, year: int, month: int, day: int, time_: int,
-                 stadium: str = None, league: str = None, team_home: str = None, team_guest: str = None,
-                 game_passed: Optional[int] = None, pay_done: Optional[int] = None, payment: int = None):
-        self.id_in_db = id_in_db
-        self.league = league
-        self.date = self._date_list_in_str(year, month, day)
-        self.time = self._time_int_in_str(time_)
-        self.stadium = stadium
-        self.team_home = team_home
-        self.team_guest = team_guest
-        self.referee_chief = self._take_referee("chief").strip()
-        self.referee_first = self._take_referee("first").strip()
-        self.referee_second = self._take_referee("second").strip()
-        self.referee_reserve = self._take_referee("reserve")
-        self.game_passed = bool(game_passed)
-        self.pay_done = bool(pay_done)
-        self.payment = payment
+    def __init__(self, **kwargs):
+        self.id_in_db = kwargs.pop("id", None)
+        self.referee_chief = self.referee_first = self.referee_second = self.referee_reserve\
+            = self.league = self.stadium = self.team_home = self.team_guest = None
+
+        year = kwargs.pop("year", None)
+        month = kwargs.pop("month", None)
+        day = kwargs.pop("day", None)
+        time_ = kwargs.pop("time", None)
+        hour, minute = int(time_) // 100, int(time_) % 100
+        self.date = datetime.datetime(year, month, day, hour=hour, minute=minute)
+
+        self._set_referee(**kwargs)
+        self._set_league(**kwargs)
+        self._set_stadium(**kwargs)
+        self._set_team(**kwargs)
+
+        self.game_passed = bool(kwargs.pop("game_passed", None))
+        self.pay_done = bool(kwargs.pop("pay_done", None))
+        self.payment = kwargs.pop("payment", None)
         self.status_key = self._get_status(self.game_passed, self.pay_done)
         self.status = self.status_icn[self.status_key]
 
-    def _take_referee(self, position: str) -> str:
-        """Возвращает ФИО судьи из БД.
+    def _set_referee(self, **kwargs):
+        for referee in ["referee_chief", "referee_first", "referee_second", "referee_reserve"]:
+            referee_id = kwargs.pop(referee, None)
+            referee_obj = Referee(referee_id) if referee_id else None
+            setattr(self, referee, referee_obj)
 
-            Parameters:
-                position(str) - позиция судьи, может быть [chief, first, second, reserve].
+    def _set_league(self, **kwargs):
+        league_id = kwargs.pop("league_id", None)
+        league_obj = League(league_id) if league_id else None
+        setattr(self, "league", league_obj)
 
-            Return:
-                name(str) - имя (если есть), фамилия (если есть), отчество (если есть) судьи."""
+    def _set_stadium(self, **kwargs):
+        stadium_id = kwargs.pop("stadium_id", None)
+        stadium_obj = Stadium(stadium_id) if stadium_id else None
+        setattr(self, "stadium", stadium_obj)
 
-        table = f"games INNER JOIN referee ON games.referee_{position} = referee.id"
-        first_name = DB.take_data("referee.first_name", table, conditions={"games.id": self.id_in_db}, one_value=True)
-        second_name = DB.take_data("referee.second_name", table, conditions={"games.id": self.id_in_db}, one_value=True)
-        third_name = DB.take_data("referee.third_name", table, conditions={"games.id": self.id_in_db}, one_value=True)
-
-        name = [f"{name[0]} " if name and name[0] else '' for name in [first_name, second_name, third_name]]
-        name = "".join(name)
-
-        return name
-
-    def _time_int_in_str(self, time_: int) -> str:
-        """Преобразует значние времени взятое из базы данных в виде 4-х целых чисел в формат HH:MM."""
-        hour, minute = time_ // 100, time_ % 100
-
-        hour = self._change_if_less_ten(hour)
-        minute = self._change_if_less_ten(minute)
-
-        return f'{hour}:{minute}'
-
-    def _date_list_in_str(self, year: int, month: int, day: int) -> str:
-        """Преобразует значние года, месяца и года в формат DD.MM.YYYY."""
-        day = self._change_if_less_ten(day)
-        month = self._change_if_less_ten(month)
-
-        return f'{day}.{month}.{year}'
+    def _set_team(self, **kwargs):
+        for team in ["team_home", "team_guest"]:
+            team_id = kwargs.pop(team, None)
+            team_obj = Team(team_id) if team_id else None
+            setattr(self, team, team_obj)
 
     @staticmethod
     def _get_status(game_passed: bool, pay_done: bool) -> Union[str, tuple]:
@@ -259,34 +310,49 @@ class Game:
         elif not game_passed:
             return "not_passed"
 
-    @staticmethod
-    def _change_if_less_ten(number):
-        """Преобразует значение меньше 10 в формат 0_."""
-        if int(number) < 10:
-            number = f'0{number}'
 
-        return number
+class Referee:
+    def __init__(self, id_: int):
+        self.id = id_
+
+    @property
+    def first_name(self):
+        return take_one_data("first_name", "Referee", {"id": self.id})
+
+    @property
+    def second_name(self):
+        return take_one_data("second_name", "Referee", {"id": self.id})
+
+    @property
+    def third_name(self):
+        return take_one_data("third_name", "Referee", {"id": self.id})
 
 
-def take_name_from_db(table: str) -> list:
-    """Возвращает значение из БД с помощью функций класса DB.
+class League:
+    def __init__(self, id_: int):
+        self.id = id_
 
-    Parameters:
-        table (str) - из какой таблицы брать значения. В классе DB должен быть метод take_{mode}.
+    @property
+    def name(self):
+        return take_one_data("name", "League", {"id": self.id})
 
-    Return:
-        data (list) - список полученных имен из БД."""
 
-    try:
-        if table == "referee":
-            data = DB.take_data("second_name||' '||first_name", table)
-        else:
-            data = DB.take_data("name", table)
+class Stadium:
+    def __init__(self, id_: int):
+        self.id = id_
 
-        return data
+    @property
+    def name(self):
+        return take_one_data("name", "Stadium", {"id": self.id})
 
-    except AttributeError:
-        raise AttributeError(f"ConnDB has no table '{table}'")
+
+class Team:
+    def __init__(self, id_: int):
+        self.id = id_
+
+    @property
+    def name(self):
+        return take_one_data("name", "Team", {"id": self.id})
 
 
 class DropMenu(MDDropdownMenu):
@@ -399,15 +465,15 @@ class DialogContent(RecycleView):
 
             elif type(item) == dict:
                 if type(box) is ExpansionGridLayout:
-                    item.setdefault('visible', False)
+                    item.pop('visible', False)
 
-                class_ = item.setdefault('class', '')
-                type_ = item.setdefault('type', '')
+                class_ = item.pop('class', '')
+                type_ = item.pop('type', '')
 
                 if class_ == "boxlayout":
-                    new_box = MDBoxLayout(orientation=item.setdefault("orientation", "vertical"),
-                                          spacing=item.setdefault("spacing", 0),
-                                          padding=item.setdefault("padding", 0)
+                    new_box = MDBoxLayout(orientation=item.pop("orientation", "vertical"),
+                                          spacing=item.pop("spacing", 0),
+                                          padding=item.pop("padding", 0)
                                           )
                     box.add_widget(new_box)
                     box = new_box
@@ -415,24 +481,24 @@ class DialogContent(RecycleView):
                 elif class_ == "gridlayout":
                     box_ = MDGridLayout(padding=[0, 10, 0, 0],
                                         spacing=10,
-                                        rows=item.setdefault("cols", 1),
-                                        cols=item.setdefault("rows", 1))
+                                        rows=item.pop("cols", 1),
+                                        cols=item.pop("rows", 1))
                     box.add_widget(box_)
                     box = box_
 
                 elif class_ == "gridlayout":
-                    box_ = MDGridLayout(rows=item.setdefault("cols", 1),
-                                        cols=item.setdefault("rows", 1))
+                    box_ = MDGridLayout(rows=item.pop("cols", 1),
+                                        cols=item.pop("rows", 1))
                     box.add_widget(box_)
                     box = box_
 
                 elif class_ == "expansionpanel":
                     box_ = ExpansionGridLayout(padding=[0, 10, 0, 0],
                                                spacing=10,
-                                               cols=item.setdefault("cols", 1),
+                                               cols=item.pop("cols", 1),
                                                adaptive_height=True)
                     panel = ExpansionPanel(self,
-                                           panel_cls=MDExpansionPanelOneLine(text=item.setdefault("panel_text", "")),
+                                           panel_cls=MDExpansionPanelOneLine(text=item.pop("panel_text", "")),
                                            content=box_)
                     box.add_widget(panel)
                     box = box_
@@ -469,8 +535,8 @@ class DialogContent(RecycleView):
         self._add_widget(GamePassedCheck(instruction=instr), box)
 
     def _add_label(self, instr: dict, box: Layout):
-        size_hint_x = instr.setdefault('size_hint_x', 1)
-        text = instr.setdefault('text', '')
+        size_hint_x = instr.pop('size_hint_x', 1)
+        text = instr.pop('text', '')
 
         self._add_widget(Label(text=text, size_hint_x=size_hint_x), box)
 
@@ -630,7 +696,7 @@ class DialogContent(RecycleView):
             except IndexError:
                 continue
 
-            if issubclass(widgets[inx + 1].__class__, TextField)\
+            if isinstance(widgets[inx + 1], TextField)\
                     and widgets[inx + 1].visible and not widgets[inx + 1].text:
                 next_widget = widgets[inx + 1]
                 next_widget.focus = True
@@ -694,6 +760,13 @@ class AddGameContent(DialogContent):
                 {'class': 'label', 'text': '', 'size_hint_x': 0.19},
                 {'class': 'textfield', 'type': 'payment', 'name': 'Payment', 'data_key': 'payment', 'size_hint_x': 0.5}
             ],
+            [
+                {'class': 'boxlayout', 'orientation': 'horizontal', 'spacing': 10},
+                {'class': 'checkbox', 'data_key': 'pay_done', 'size_hint_x': 0.1},
+                {'class': 'label', 'text': 'Pay done', 'size_hint_x': 0.2},
+                {'class': 'label', 'text': '', 'size_hint_x': 0.19},
+                {'class': 'label', 'text': '', 'size_hint_x': 0.5}
+            ]
         ]
 
         super(AddGameContent, self).__init__()
@@ -776,7 +849,6 @@ class ExpansionPanel(MDExpansionPanel):
     def on_open(self):
         self.parent_.increase_box_height(self.content_columns)
         self.set_children_visible()
-        print(self.content.children[0].visible)
 
     def on_close(self):
         self.parent_.set_default_box_height()
@@ -801,28 +873,28 @@ class ExpansionGridLayout(MDGridLayout):
 
 class TextField(MDTextField):
     def __init__(self, **kwargs):
-        self.parent_dialog = kwargs.pop('parent_')
-        text = kwargs.pop('text')
-        instr = kwargs.pop('instruction')
-        self.size_hint_x = instr.setdefault('size_hint_x', 1)
+        self.parent_dialog = kwargs.pop('parent_', None)
+        text = kwargs.pop('text', None)
+        instr = kwargs.pop('instruction', None)
+        self.size_hint_x = instr.pop('size_hint_x', 1)
 
         super(TextField, self).__init__()
 
         self.set_text(self, text)
 
-        self.name = self.hint_text = instr.setdefault('name').capitalize()
-        self.required = instr.setdefault('notnull', False)
+        self.name = self.hint_text = instr.pop('name', '').capitalize()
+        self.required = instr.pop('notnull', False)
         self.helper_text_mode = "on_error"
 
-        self.data_key = instr.setdefault('data_key')
-        self.data_table = instr.setdefault('data_table')
-        self.what_fields_child_fill = instr.setdefault('what_fields_child_fill')
-        self.add_text_in_parent = instr.setdefault('add_text_in_parent', False)
+        self.data_key = instr.pop('data_key', None)
+        self.data_table = instr.pop('data_table', None)
+        self.what_fields_child_fill = instr.pop('what_fields_child_fill', None)
+        self.add_text_in_parent = instr.pop('add_text_in_parent', False)
 
         self.have_drop_menu = False
         self.change_focus = False
 
-        self.visible = instr.setdefault("visible", True)
+        self.visible = instr.pop("visible", True)
 
     def on_focus_(self):
         pass
@@ -1108,9 +1180,9 @@ class TFWithDrop(TextField):
 class GamePassedCheck(CheckBox):
     def __init__(self, **kwargs):
         instr = kwargs.pop('instruction')
-        self.size_hint_x = instr.setdefault('size_hint_x', 1)
-        self.data_key = instr.setdefault('data_key')
-        self.color = app.theme_cls.accent_color
+        self.size_hint_x = instr.pop('size_hint_x', 1)
+        self.data_key = instr.pop('data_key')
+        # self.color = app.theme_cls.primary_color
 
         super(GamePassedCheck, self).__init__()
 
@@ -1118,7 +1190,7 @@ class GamePassedCheck(CheckBox):
 class MainApp(MDApp):
     def build(self):
         self.theme_cls.primary_palette = "Orange"
-        self.theme_cls.primary_hue = "500"
+        self.theme_cls.primary_hue = "800"
         self.theme_cls.primary_darkhue = "900"
         self.theme_cls.primary_lighthue = "300"
 

@@ -3,43 +3,21 @@ from typing import Optional
 
 
 class ConnDB:
-    def take_games(self, name_data: list) -> list:
-        data_with_id = ["id"]
-        data_with_name = ["league", "stadium", "team_home", "team_guest"]
-        data_with_full_name = ["referee_chief", "referee_first", "referee_second", "referee_reserve"]
-        another_name_data = {"date": ["day", "month", "year"]}
-        data_from_table = {"league": "League", "stadium": "Stadium", "team_home": "Team", "team_guest": "Team",
-                           "referee_chief": "Referee", "referee_first": "Referee", "referee_second": "Referee", "referee_reserve": "Referee"}
-        table_with_several_data = ["Referee", "Team"]
+    @property
+    def games(self) -> list:
+        column_names = ["id", "league_id", "stadium_id", "team_home", "team_guest",
+                        "referee_chief", "referee_first", "referee_second", "referee_reserve",
+                        "game_passed", "payment", "pay_done", "year", "month", "day", "time",
+                        "team_home_year", "team_guest_year"]
 
-        inner_join = ""
+        sql = f'''SELECT * FROM Games'''
 
-        for inx, name in enumerate(name_data):
-            i = 0
-            if name in data_from_table.keys():
-                table = data_from_table[name]
-                if table in table_with_several_data:
-                    inner_join += f"INNER JOIN {table} AS {i} ON Games.{name} = {i}.id\n"
-                    i += 1
-                else:
-                    inner_join += f"INNER JOIN {table} ON Games.{name}_id = {table}.id"
+        games_list_of_kwargs = []
+        return_request = self.select_request(sql)
+        for r in return_request:
+            games_list_of_kwargs.append(dict(zip(column_names, r)))
 
-            if name in data_with_id:
-                name_data[inx] = f"{name}.id"
-            elif name in data_with_name:
-                name_data[inx] = f"{name}.name"
-            elif name in data_with_full_name:
-                name_data[inx] = f"{name}.first_name||' '||{name}.second_name||' '||{name}.third_name"
-            elif name in another_name_data.keys():
-                name_data[inx] = ", ".join(another_name_data[name])
-
-        print(name_data)
-
-        sql = f'''SELECT {", ".join(name_data)}
-                   FROM Games {inner_join}'''
-
-        print(sql)
-        return self.select_request(sql)
+        return games_list_of_kwargs
 
     def take_data(self, what_return: str, table: str,
                   conditions: Optional[dict] = None,
@@ -128,4 +106,4 @@ class ConnDB:
 
 
 if __name__ == '__main__':
-    print(ConnDB().insert("game", {"payment": "2000", "year": 2021, "first_name": "Егор", "second_name": "Ходин"}))
+    print("не тот файл, дурачок :)")
