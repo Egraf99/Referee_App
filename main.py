@@ -628,6 +628,7 @@ class DialogContent(RecycleView):
                     next_widget = widgets[inx + 1]
                     next_widget.focus = True
                     self.scroll_to(next_widget)
+                    break
 
 
 class AddGameContent(DialogContent):
@@ -697,8 +698,7 @@ class AddRefereeContent(DialogContent):
         self.items = [
             {'name': 'Second name', 'class': 'textfield', 'data_key': 'second_name', 'notnull': True,
              'add_text_in_parent': True},
-            {'name': 'Fist name', 'class': 'textfield', 'data_key': 'first_name', 'notnull': True,
-             'add_text_in_parent': True},
+            {'name': 'Fist name', 'class': 'textfield', 'data_key': 'first_name', 'add_text_in_parent': True},
             {'name': 'Third name', 'class': 'textfield', 'data_key': 'third_name'},
             {'name': 'Phone', 'class': 'textfield', 'type': 'phone', 'data_key': 'phone'},
             {'name': 'Category', 'class': 'textfield', 'type': 'with_dropmenu', 'what_fields_child_fill': ['name'],
@@ -715,7 +715,7 @@ class AddStadiumContent(DialogContent):
             {'name': 'Name', 'class': 'textfield', 'data_key': 'name', 'notnull': True, 'add_text_in_parent': True},
             {'name': 'City', 'class': 'textfield', 'type': 'with_dropmenu', 'what_fields_child_fill': ['name'],
              'data_table': 'city', 'data_key': 'city_id', 'notnull': True},
-            {'name': 'Address', 'class': 'textfield', 'data_key': 'address', 'notnull': True},
+            {'name': 'Address', 'class': 'textfield', 'data_key': 'address'},
         ]
 
         super(AddStadiumContent, self).__init__(**kwargs)
