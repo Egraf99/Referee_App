@@ -1,5 +1,5 @@
 import re
-import datetime
+
 from copy import deepcopy
 from abc import ABC
 from math import ceil
@@ -17,7 +17,6 @@ from kivy.properties import ObjectProperty
 from kivy.metrics import dp
 
 from kivy.utils import get_color_from_hex
-from kivymd.color_definitions import colors
 from kivymd.uix.expansionpanel import MDExpansionPanel, MDExpansionPanelOneLine
 from kivymd.uix.boxlayout import MDBoxLayout
 from kivymd.uix.gridlayout import MDGridLayout
@@ -35,7 +34,7 @@ from kivy.uix.recycleview import RecycleView
 from kivymd.uix.menu import MDDropdownMenu
 from kivymd.app import MDApp
 
-from database import ConnDB
+from database import *
 
 
 def open_dialog(text):
@@ -196,163 +195,6 @@ class GamesTable(MDDataTable, TouchBehavior):
             returned_list_of_data.append(data_str)
 
         return returned_list_of_data
-
-
-def take_one_data(data_name: str, table: str, condition: dict = None):
-    name = DB.take_data(data_name, table, condition, one_value=True)
-    return name[0] if name and name[0] else None
-
-
-def take_many_data(data_name: str, table: str, condition: dict = None):
-    return DB.take_data(data_name, table, condition)
-
-
-def take_name_from_db(table: str) -> list:
-    """Возвращает значение из БД с помощью функций класса DB.
-
-    Parameters:
-        table (str) - из какой таблицы брать значения. В классе DB должен быть метод take_{mode}.
-
-    Return:
-        data (list) - список полученных имен из БД."""
-
-    try:
-        if table == "referee":
-            data = take_many_data("second_name||' '||first_name", table)
-        else:
-            data = take_many_data("name", table)
-
-        return data
-
-    except AttributeError:
-        raise AttributeError(f"ConnDB has no table '{table}'")
-
-
-class Game:
-    """Класс, определяющий игру из БД."""
-    # dict of status icon, color, name
-    status_icn = {"not_passed": ("calendar-alert", colors["Yellow"]["800"], "Не проведена"),
-                  "passed": ("calendar-check", colors["LightGreen"]["400"], "Проведена"),
-                  "pay_done": ("calendar-check", colors["Green"]["700"], "Оплачено")}
-    # list future attribute
-    attribute = ["id_in_db",
-                 "league", "date", "time", "stadium",
-                 "team_home",
-                 "team_guest",
-                 "referee_chief",
-                 "referee_first",
-                 "referee_second",
-                 "referee_reserve", "game_passed",
-                 "pay_done",
-                 "payment",
-                 "status"]
-
-    def __init__(self, **kwargs):
-        self.id_in_db = kwargs.pop("id", None)
-        self.referee_chief = self.referee_first = self.referee_second = self.referee_reserve\
-            = self.league = self.stadium = self.team_home = self.team_guest = None
-
-        year = kwargs.pop("year", None)
-        month = kwargs.pop("month", None)
-        day = kwargs.pop("day", None)
-        time_ = kwargs.pop("time", None)
-        hour, minute = int(time_) // 100, int(time_) % 100
-        self.date = datetime.datetime(year, month, day, hour=hour, minute=minute)
-
-        self._set_referee(**kwargs)
-        self._set_league(**kwargs)
-        self._set_stadium(**kwargs)
-        self._set_team(**kwargs)
-
-        self.game_passed = bool(kwargs.pop("game_passed", None))
-        self.pay_done = bool(kwargs.pop("pay_done", None))
-        self.payment = kwargs.pop("payment", None)
-        self.status_key = self._get_status(self.game_passed, self.pay_done)
-        self.status = self.status_icn[self.status_key]
-
-    def _set_referee(self, **kwargs):
-        for referee in ["referee_chief", "referee_first", "referee_second", "referee_reserve"]:
-            referee_id = kwargs.pop(referee, None)
-            referee_obj = Referee(referee_id) if referee_id else None
-            setattr(self, referee, referee_obj)
-
-    def _set_league(self, **kwargs):
-        league_id = kwargs.pop("league_id", None)
-        league_obj = League(league_id) if league_id else None
-        setattr(self, "league", league_obj)
-
-    def _set_stadium(self, **kwargs):
-        stadium_id = kwargs.pop("stadium_id", None)
-        stadium_obj = Stadium(stadium_id) if stadium_id else None
-        setattr(self, "stadium", stadium_obj)
-
-    def _set_team(self, **kwargs):
-        for team in ["team_home", "team_guest"]:
-            team_id = kwargs.pop(team, None)
-            team_obj = Team(team_id) if team_id else None
-            setattr(self, team, team_obj)
-
-    @staticmethod
-    def _get_status(game_passed: bool, pay_done: bool) -> Union[str, tuple]:
-        """Возвращает статус игры от переданных условий (проведена и оплачена ли игра).
-
-            Parameters:
-                game_passed(bool) - (не) прошла игра.
-                pay_done(bool) - (не) оплачена игра.
-
-            Return:
-                status(str) - текущий статус игры."""
-
-        if game_passed and pay_done:
-            return "pay_done"
-        elif game_passed and not pay_done:
-            return "passed"
-        elif not game_passed:
-            return "not_passed"
-
-
-class Referee:
-    def __init__(self, id_: int):
-        self.id = id_
-
-    @property
-    def first_name(self):
-        return take_one_data("first_name", "Referee", {"id": self.id})
-
-    @property
-    def second_name(self):
-        return take_one_data("second_name", "Referee", {"id": self.id})
-
-    @property
-    def third_name(self):
-        return take_one_data("third_name", "Referee", {"id": self.id})
-
-
-class League:
-    def __init__(self, id_: int):
-        self.id = id_
-
-    @property
-    def name(self):
-        return take_one_data("name", "League", {"id": self.id})
-
-
-class Stadium:
-    def __init__(self, id_: int):
-        self.id = id_
-
-    @property
-    def name(self):
-        return take_one_data("name", "Stadium", {"id": self.id})
-
-
-class Team:
-    def __init__(self, id_: int):
-        self.id = id_
-
-    @property
-    def name(self):
-        return take_one_data("name", "Team", {"id": self.id})
 
 
 class DropMenu(MDDropdownMenu):
@@ -659,7 +501,7 @@ class DialogContent(RecycleView):
 
             # запрашивает id исходя из условий
             try:
-                id_ = DB.take_data("id", field.data_table, conditions_dict, one_value=True)[0]
+                id_ = DB._take_data("id", field.data_table, conditions_dict, one_value=True)[0]
                 data[field.data_key] = id_
             except TypeError:
                 open_dialog(f'Name "{field.text}" is not found in the table {field.data_table.capitalize()}')
@@ -758,14 +600,14 @@ class AddGameContent(DialogContent):
                 {'class': 'checkbox', 'data_key': 'game_passed', 'size_hint_x': 0.1},
                 {'class': 'label', 'text': 'Game passed', 'size_hint_x': 0.2},
                 {'class': 'label', 'text': '', 'size_hint_x': 0.19},
-                {'class': 'textfield', 'type': 'payment', 'name': 'Payment', 'data_key': 'payment', 'size_hint_x': 0.5}
+                {'class': 'label', 'text': '', 'size_hint_x': 0.5}
             ],
             [
                 {'class': 'boxlayout', 'orientation': 'horizontal', 'spacing': 10},
                 {'class': 'checkbox', 'data_key': 'pay_done', 'size_hint_x': 0.1},
                 {'class': 'label', 'text': 'Pay done', 'size_hint_x': 0.2},
                 {'class': 'label', 'text': '', 'size_hint_x': 0.19},
-                {'class': 'label', 'text': '', 'size_hint_x': 0.5}
+                {'class': 'textfield', 'type': 'payment', 'name': 'Payment', 'data_key': 'payment', 'size_hint_x': 0.5}
             ]
         ]
 
@@ -979,7 +821,7 @@ class DateTF(TFWithoutDrop):
     def __init__(self, **kwargs):
         super(DateTF, self).__init__(**kwargs)
 
-        self.helper_text = "dd.mm.yyyy HH:MM"
+        self.helper_text = "DD.MM.YYYY"
         self.helper_text_mode = "persistent"
 
     def insert_text(self, substring, from_undo=False):
