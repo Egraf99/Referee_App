@@ -4,7 +4,7 @@ from typing import Optional, Union, Any
 from kivymd.color_definitions import colors
 
 
-def take_one_data(what_return: str, table: str, condition: dict[str, Any] = None) -> str:
+def take_one_data(what_return: str, table: str, condition: dict[str, Any] = None, order: dict = None) -> str:
     """Возвращает одно (первое) значение из БД.
 
         Parameters:
@@ -15,11 +15,11 @@ def take_one_data(what_return: str, table: str, condition: dict[str, Any] = None
         Return:
             name - возвращаемое значение."""
 
-    name = ConnDB()._take_data(what_return, table, condition, one_value=True)
+    name = ConnDB().take_data(what_return, table, condition, one_value=True, order=order)
     return name[0] if name and name[0] else None
 
 
-def take_many_data(what_return: str, table: str, condition: dict[str, Any] = None) -> list:
+def take_many_data(what_return: str, table: str, condition: dict[str, Any] = None, order: dict = None) -> list:
     """Возвращает все значения из БД, подходящие по условиям.
 
             Parameters:
@@ -30,7 +30,7 @@ def take_many_data(what_return: str, table: str, condition: dict[str, Any] = Non
             Return:
                 name - список возвращаемых значений."""
 
-    return ConnDB()._take_data(what_return, table, condition, one_value=False)
+    return ConnDB().take_data(what_return, table, condition, one_value=False, order=order)
 
 
 def take_name_from_db(table: str) -> list:
@@ -44,9 +44,10 @@ def take_name_from_db(table: str) -> list:
 
     try:
         if table == "referee":
-            data = take_many_data("second_name||' '||first_name", table)
+            data = take_many_data("second_name||' '||first_name", table,
+                                  order={"ASC": ["second_name", "first_name", "third_name"]})
         else:
-            data = take_many_data("name", table)
+            data = take_many_data("name", table, order={"ASC": ["name"]})
 
         return data
 
@@ -73,9 +74,9 @@ class ConnDB:
 
         return games_dict_of_kwargs
 
-    def _take_data(self, what_return: str, table: str,
-                   conditions: Optional[dict] = None,
-                   one_value: bool = False) -> Union[str, list]:
+    def take_data(self, what_return: str, table: str,
+                   conditions: dict = None,
+                   one_value: bool = False, order: dict = None) -> Union[str, list]:
         values = None
         if conditions:
             name_list = []
@@ -91,7 +92,17 @@ class ConnDB:
         else:
             sql = f'''SELECT {what_return} FROM {table}'''
 
-        # print(sql, values)
+        if order:
+            order_sql = []
+            sql += " ORDER BY "
+            for key in order:
+                assert key in ["ASC", "DESC"], "order keys must be 'ASC' or 'DESC'"
+                assert type(order[key]) == list, "order value type must be list"
+
+                order_sql.append(f"{', '.join(order[key])} {key}")
+            sql += ", ".join(order_sql)
+
+        # print(sql)
         return self._select_request(sql, values, one_value=one_value)
 
     def insert(self, table: str, data: dict) -> None:
@@ -302,5 +313,5 @@ class City:
 
 
 if __name__ == '__main__':
-    # print(Referee(1).first_name())
+    print(take_many_data("second_name", "Referee", order={"ASC": ["second_name", "first_name"]}))
     print("не тот файл, дурачок :)")

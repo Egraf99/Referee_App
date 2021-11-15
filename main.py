@@ -23,7 +23,7 @@ from kivymd.uix.gridlayout import MDGridLayout
 from kivymd.uix.card import MDCard
 from kivymd.uix.datatables import MDDataTable
 from kivymd.uix.dialog import MDDialog
-from kivymd.uix.button import MDFlatButton, MDFloatingActionButton, MDRaisedButton
+from kivymd.uix.button import MDFlatButton, MDFloatingActionButton, MDRaisedButton, MDTextButton
 from kivymd.uix.textfield import MDTextField
 from kivy.uix.label import Label
 from kivymd.uix.list import OneLineAvatarIconListItem, OneLineIconListItem
@@ -74,7 +74,7 @@ class GameScreen:
 
     def pop_dialog_add_game(self) -> None:
         """Открывает Dialog для добавления новой игры."""
-        self.add_game_dialog = DialogWindow(type_="games")
+        self.add_game_dialog = AddDialogWindow(type_="games")
         self.add_game_dialog.open()
 
     def _create_main_page(self) -> None:
@@ -116,20 +116,16 @@ class GamesTable(MDDataTable, TouchBehavior):
 
         self.count_cell_in_row = len(self.column_data)
 
-    #    self.touched_cell = None
+    def on_row_press(self, instance_cell_row):
+        if self.list_of_games:  # без этой проверки при отсутствии игр вылетает ошибка
+            # строка, в которой находится нажатая клетка
+            row_cell = instance_cell_row.index // self.count_cell_in_row
 
-    # def on_row_press(self, instance_cell_row):
-    #     """Necessary for saving touched Cell"""
-    #     self.touched_cell = instance_cell_row
-    #
-    # def on_long_touch(self, touch, *args):
-    #     if self.list_of_games:  # без этой проверки при отсутствии игр вылетает ошибка
-    #         # строка, в которой находится нажатая клетка
-    #         row_cell = self.touched_cell.index // self.count_cell_in_row
-    #
-    #         # игра, записанная в данной строке
-    #         game = self.list_of_games[row_cell]
-    #         print(game.status_key)
+            # игра, записанная в данной строке
+            game = self.list_of_games[row_cell]
+            print(game)
+            self.info_dialog = InfoDialogWindow(type_="game", data_cls=game)
+            self.info_dialog.open()
 
     def _set_column_name_and_size(self, data: str):
         if data in self.data_dict:
@@ -223,29 +219,64 @@ class DropMenu(MDDropdownMenu):
 
 
 class DialogWindow(MDDialog):
+    def __init__(self):
+        self.caller_ = None
+        self.auto_dismiss = True
+        self.type = "custom"
+        super(DialogWindow, self).__init__()
+
+
+class InfoDialogWindow(DialogWindow):
+    def __init__(self, **kwargs):
+        """Parameters:
+            type_(str) - тип создаваемого MDDialog. type_ может принимать значения:
+                                                        games, referee, stadium, league, category, city, team."""
+
+        type_ = kwargs.pop('type_')
+        assert type_ in ["game", "referee", "stadium", "league", "category", "city", "team"], '\
+                            parameter type_ must be in ["games", "referee", "stadium", "league", "category", "city", "team"]'
+
+        title = " ".join(['Info', type_])
+        self.title = title
+
+        self._set_content_cls(type_, **kwargs)
+        self.buttons = [MDFlatButton(text="CANCEL", on_release=self.dismiss, theme_text_color="Custom",
+                                     text_color=app.theme_cls.primary_color),
+                        MDRaisedButton(text="DELETE",
+                                       on_release=self._delete_button_click,
+                                       md_bg_color=app.theme_cls.error_color)]
+
+        super(InfoDialogWindow, self).__init__()
+
+    def _set_content_cls(self, type_, **kwargs):
+        if type_ == "game":
+            self.content_cls = InfoGameContent(**kwargs)
+
+    def _delete_button_click(self, event):
+        print("delete")
+
+
+class AddDialogWindow(DialogWindow):
     def __init__(self, **kwargs):
         """Parameters:
                 type_(str) - тип создаваемого MDDialog. type_ может принимать значения: 
                                                             games, referee, stadium, league, category, city, team."""
+        print(kwargs)
         type_ = kwargs.pop('type_')
         assert type_ in ["games", "referee", "stadium", "league", "category", "city", "team"], '\
                     parameter type_ must be in ["games", "referee", "stadium", "league", "category", "city", "team"]'
 
-        self.caller_ = None
-
         title = " ".join(['Add', type_])
-
-        self.auto_dismiss = True
         self.title = title
-        self.type = "custom"
+
         self._set_content_cls(type_, **kwargs)
         self.buttons = [MDFlatButton(text="CANCEL", on_release=self.dismiss, theme_text_color="Custom",
-                                     text_color=app.theme_cls.error_color),
+                                     text_color=app.theme_cls.primary_color),
                         MDRaisedButton(text="ADD",
                                        on_release=self._add_button_click,
                                        md_bg_color=app.theme_cls.primary_dark)]
 
-        super(DialogWindow, self).__init__()
+        super(AddDialogWindow, self).__init__()
 
     def _add_button_click(self, event) -> None:
         """Вызывается при нажатии кнопки ADD"""
@@ -386,12 +417,6 @@ class DialogContent(RecycleView):
         box.add_widget(widget)
         self.children_.append(widget)
 
-    def set_focus(self, dt=None):
-        for field in self.children_:
-            if not field.text:
-                field.focus = True
-                break
-
     def _get_height(self):
         """Устанавливает высоту Content в зависимости от количества items."""
         height = len(self.items) * 70
@@ -501,7 +526,7 @@ class DialogContent(RecycleView):
 
             # запрашивает id исходя из условий
             try:
-                id_ = DB._take_data("id", field.data_table, conditions_dict, one_value=True)[0]
+                id_ = take_one_data("id", field.data_table, conditions_dict)
                 data[field.data_key] = id_
             except TypeError:
                 open_dialog(f'Name "{field.text}" is not found in the table {field.data_table.capitalize()}')
@@ -544,6 +569,14 @@ class DialogContent(RecycleView):
                 next_widget.focus = True
                 self.scroll_to(next_widget)
                 break
+
+
+class InfoGameContent(DialogContent):
+    def __init__(self, **kwargs):
+        self.game = kwargs.pop("data_cls", None)
+        self.items = []
+
+        super(InfoGameContent, self).__init__(**kwargs)
 
 
 class AddGameContent(DialogContent):
@@ -1015,7 +1048,7 @@ class TFWithDrop(TextField):
 
     def _drop_menu_add_data(self, filled_fields=None):
         """Создает Dialog для добавления новых данных в БД."""
-        self.add_data_dialog = DialogWindow(type_=self.data_table, filled_field=filled_fields, caller_=self)
+        self.add_data_dialog = AddDialogWindow(type_=self.data_table, filled_field=filled_fields, caller_=self)
         self.add_data_dialog.open()
 
 
