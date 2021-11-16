@@ -13,6 +13,7 @@ from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.layout import Layout
 from kivy.uix.checkbox import CheckBox
 from kivy.uix.scrollview import ScrollView
+from kivy.uix.label import Label
 from kivy.properties import ObjectProperty
 from kivy.metrics import dp
 
@@ -25,7 +26,7 @@ from kivymd.uix.datatables import MDDataTable
 from kivymd.uix.dialog import MDDialog
 from kivymd.uix.button import MDFlatButton, MDFloatingActionButton, MDRaisedButton, MDTextButton
 from kivymd.uix.textfield import MDTextField
-from kivy.uix.label import Label
+from kivymd.uix.label import MDLabel
 from kivymd.uix.list import OneLineAvatarIconListItem, OneLineIconListItem
 from kivymd.uix.snackbar import Snackbar
 from kivy.uix.behaviors.focus import FocusBehavior
@@ -74,7 +75,7 @@ class GameScreen:
 
     def pop_dialog_add_game(self) -> None:
         """Открывает Dialog для добавления новой игры."""
-        self.add_game_dialog = AddDialogWindow(type_="games")
+        self.add_game_dialog = AddDialogWindow(type_="game")
         self.add_game_dialog.open()
 
     def _create_main_page(self) -> None:
@@ -123,7 +124,6 @@ class GamesTable(MDDataTable, TouchBehavior):
 
             # игра, записанная в данной строке
             game = self.list_of_games[row_cell]
-            print(game)
             self.info_dialog = InfoDialogWindow(type_="game", data_cls=game)
             self.info_dialog.open()
 
@@ -233,27 +233,45 @@ class InfoDialogWindow(DialogWindow):
                                                         games, referee, stadium, league, category, city, team."""
 
         type_ = kwargs.pop('type_')
-        assert type_ in ["game", "referee", "stadium", "league", "category", "city", "team"], '\
-                            parameter type_ must be in ["games", "referee", "stadium", "league", "category", "city", "team"]'
 
         title = " ".join(['Info', type_])
         self.title = title
 
         self._set_content_cls(type_, **kwargs)
         self.buttons = [MDFlatButton(text="CANCEL", on_release=self.dismiss, theme_text_color="Custom",
-                                     text_color=app.theme_cls.primary_color),
-                        MDRaisedButton(text="DELETE",
-                                       on_release=self._delete_button_click,
-                                       md_bg_color=app.theme_cls.error_color)]
+                                     text_color=app.theme_cls.primary_color)]
 
         super(InfoDialogWindow, self).__init__()
 
     def _set_content_cls(self, type_, **kwargs):
         if type_ == "game":
             self.content_cls = InfoGameContent(**kwargs)
+        else:
+            raise AttributeError("Incorrect type_")
 
-    def _delete_button_click(self, event):
-        print("delete")
+
+class ChangeDialogWindow(DialogWindow):
+    def __init__(self, **kwargs):
+        """Parameters:
+            type_(str) - тип создаваемого MDDialog. type_ может принимать значения:
+                                                        games, referee, stadium, league, category, city, team."""
+
+        type_ = kwargs.pop('type_')
+
+        title = " ".join(['Info', type_])
+        self.title = title
+
+        self._set_content_cls(type_, **kwargs)
+        self.buttons = [MDFlatButton(text="CANCEL", on_release=self.dismiss, theme_text_color="Custom",
+                                     text_color=app.theme_cls.primary_color)]
+
+        super(ChangeDialogWindow, self).__init__()
+
+    def _set_content_cls(self, type_, **kwargs):
+        if type_ == "referee":
+            self.content_cls = AddRefereeContent(**kwargs)
+        else:
+            raise AttributeError("Incorrect type_")
 
 
 class AddDialogWindow(DialogWindow):
@@ -263,8 +281,6 @@ class AddDialogWindow(DialogWindow):
                                                             games, referee, stadium, league, category, city, team."""
         print(kwargs)
         type_ = kwargs.pop('type_')
-        assert type_ in ["games", "referee", "stadium", "league", "category", "city", "team"], '\
-                    parameter type_ must be in ["games", "referee", "stadium", "league", "category", "city", "team"]'
 
         title = " ".join(['Add', type_])
         self.title = title
@@ -285,34 +301,27 @@ class AddDialogWindow(DialogWindow):
             self.caller_.parent.parent.set_focus()
 
     def _set_content_cls(self, type_, **kwargs) -> None:
-        if type_ == "games":
+        if type_ == "game":
             self.content_cls = AddGameContent()
-        if type_ == "referee":
+        elif type_ == "referee":
             self.content_cls = AddRefereeContent(**kwargs)
-        if type_ == "stadium":
+        elif type_ == "stadium":
             self.content_cls = AddStadiumContent(**kwargs)
-        if type_ == "league":
+        elif type_ == "league":
             self.content_cls = AddLeagueContent(**kwargs)
-        if type_ == "category":
+        elif type_ == "category":
             self.content_cls = AddCategoryContent(**kwargs)
-        if type_ == "city":
+        elif type_ == "city":
             self.content_cls = AddCityContent(**kwargs)
-        if type_ == "team":
+        elif type_ == "team":
             self.content_cls = AddTeamContent(**kwargs)
+        else:
+            raise AttributeError("Incorrect type_")
 
 
 class DialogContent(RecycleView):
-    def __init__(self, **kwargs):
-        """Parameters:
-                caller_ (Any) - объект, создавший и вызвавший этот класс.
-                filled_field (dict[str, str]) - словарь уже заполненных полей, где
-                                      ключом является название TextField, в которое нужно добавить текст, а
-                                      значением является добавляемый текст."""
-
-        self.caller_ = kwargs.pop('caller_', None)
-        self.filled_field = kwargs.pop('filled_field', {})
-
-        super(DialogContent, self).__init__(**kwargs)
+    def __init__(self):
+        super(DialogContent, self).__init__()
 
         self.children_ = []
         self._add_items_in_box(self.items, self.ids.box)
@@ -388,6 +397,9 @@ class DialogContent(RecycleView):
                 elif class_ == "label":
                     self._add_label(item, box)
 
+                elif class_ == "label_with_change":
+                    self._add_label_with_change(item, box)
+
     def _add_textfield(self, type_, box, **kwargs):
         if type_ == 'date':
             self._add_widget(DateTF(**kwargs), box)
@@ -405,13 +417,16 @@ class DialogContent(RecycleView):
             self._add_widget(TFWithoutDrop(**kwargs), box)
 
     def _add_checkbutton(self, instr: dict, box: Layout):
-        self._add_widget(GamePassedCheck(instruction=instr), box)
+        self._add_widget(GameCheck(instruction=instr), box)
 
     def _add_label(self, instr: dict, box: Layout):
         size_hint_x = instr.pop('size_hint_x', 1)
         text = instr.pop('text', '')
 
         self._add_widget(Label(text=text, size_hint_x=size_hint_x), box)
+
+    def _add_label_with_change(self, instr: dict, box: Layout):
+        self._add_widget(LabelWithChange(**instr, game=self.game), box)
 
     def _add_widget(self, widget, box: Layout):
         box.add_widget(widget)
@@ -443,6 +458,47 @@ class DialogContent(RecycleView):
     def _get_items_height(self, count_items: int):
         return self.default_item_height * count_items
 
+    def set_next_focus(self, previous_widget):
+        """Устанавливает фокус на следующем виджете, если он не заполнен."""
+        widgets = self.children_
+        start_inx = widgets.index(previous_widget)
+
+        for inx, widget in enumerate(widgets[start_inx:]):
+            inx += start_inx
+
+            try:
+                widgets[inx + 1]
+            except IndexError:
+                continue
+
+            if isinstance(widgets[inx + 1], TextField)\
+                    and widgets[inx + 1].visible and not widgets[inx + 1].text:
+                next_widget = widgets[inx + 1]
+                next_widget.focus = True
+                self.scroll_to(next_widget)
+                break
+
+
+class InfoDialogContent(DialogContent):
+    def __init__(self, **kwargs):
+        print(self.game)
+
+        super(InfoDialogContent, self).__init__()
+
+
+class AddDialogContent(DialogContent):
+    def __init__(self, **kwargs):
+        """Parameters:
+                        caller_ (Any) - объект, создавший и вызвавший этот класс.
+                        filled_field (dict[str, str]) - словарь уже заполненных полей, где
+                                              ключом является название TextField, в которое нужно добавить текст, а
+                                              значением является добавляемый текст."""
+
+        self.caller_ = kwargs.pop('caller_', None)
+        self.filled_field = kwargs.pop('filled_field', {})
+
+        super(AddDialogContent, self).__init__()
+
     def update_db(self) -> bool:
         """Обрабатывает полученные из полей данные и отправляет на обновление БД.
 
@@ -464,7 +520,7 @@ class DialogContent(RecycleView):
                 if required_not_fill:
                     not_fill_fields.append(child.hint_text)
 
-            elif isinstance(child, CheckBox):
+            elif isinstance(child, GameCheck):
                 data.update(self._check_checkbox(child))
 
         if not_fill_fields:  # если есть незаполненные необходимые поля вызывает подсказку и возвращает неуспех
@@ -550,36 +606,22 @@ class DialogContent(RecycleView):
 
         return {checkbox.data_key: data}
 
-    def set_next_focus(self, previous_widget):
-        """Устанавливает фокус на слудующем виджете, если он не заполнен."""
-        widgets = self.children_
-        start_inx = widgets.index(previous_widget)
 
-        for inx, widget in enumerate(widgets[start_inx:]):
-            inx += start_inx
-
-            try:
-                widgets[inx + 1]
-            except IndexError:
-                continue
-
-            if isinstance(widgets[inx + 1], TextField)\
-                    and widgets[inx + 1].visible and not widgets[inx + 1].text:
-                next_widget = widgets[inx + 1]
-                next_widget.focus = True
-                self.scroll_to(next_widget)
-                break
-
-
-class InfoGameContent(DialogContent):
+class InfoGameContent(InfoDialogContent):
     def __init__(self, **kwargs):
         self.game = kwargs.pop("data_cls", None)
-        self.items = []
+        self.items = [
+            [
+                {'class': 'boxlayout', 'orientation': 'horizontal', 'spacing': 10},
+                {'text': 'Date', 'class': 'label_with_change'}
+            ]
+
+        ]
 
         super(InfoGameContent, self).__init__(**kwargs)
 
 
-class AddGameContent(DialogContent):
+class AddGameContent(AddDialogContent):
     def __init__(self):
         self.data_table = "games"
         self.items = [
@@ -632,14 +674,13 @@ class AddGameContent(DialogContent):
                 {'class': 'boxlayout', 'orientation': 'horizontal', 'spacing': 10},
                 {'class': 'checkbox', 'data_key': 'game_passed', 'size_hint_x': 0.1},
                 {'class': 'label', 'text': 'Game passed', 'size_hint_x': 0.2},
-                {'class': 'label', 'text': '', 'size_hint_x': 0.19},
-                {'class': 'label', 'text': '', 'size_hint_x': 0.5}
+                {'class': 'label', 'size_hint_x': 0.69}
             ],
             [
                 {'class': 'boxlayout', 'orientation': 'horizontal', 'spacing': 10},
                 {'class': 'checkbox', 'data_key': 'pay_done', 'size_hint_x': 0.1},
                 {'class': 'label', 'text': 'Pay done', 'size_hint_x': 0.2},
-                {'class': 'label', 'text': '', 'size_hint_x': 0.19},
+                {'class': 'label', 'size_hint_x': 0.19},
                 {'class': 'textfield', 'type': 'payment', 'name': 'Payment', 'data_key': 'payment', 'size_hint_x': 0.5}
             ]
         ]
@@ -647,7 +688,7 @@ class AddGameContent(DialogContent):
         super(AddGameContent, self).__init__()
 
 
-class AddRefereeContent(DialogContent):
+class AddRefereeContent(AddDialogContent):
     def __init__(self, **kwargs):
         self.data_table = "referee"
         self.items = [
@@ -663,7 +704,7 @@ class AddRefereeContent(DialogContent):
         super(AddRefereeContent, self).__init__(**kwargs)
 
 
-class AddStadiumContent(DialogContent):
+class AddStadiumContent(AddDialogContent):
     def __init__(self, **kwargs):
         self.data_table = "stadium"
         self.items = [
@@ -676,7 +717,7 @@ class AddStadiumContent(DialogContent):
         super(AddStadiumContent, self).__init__(**kwargs)
 
 
-class AddLeagueContent(DialogContent):
+class AddLeagueContent(AddDialogContent):
     def __init__(self, **kwargs):
         self.data_table = "league"
         self.items = [
@@ -685,7 +726,7 @@ class AddLeagueContent(DialogContent):
         super(AddLeagueContent, self).__init__(**kwargs)
 
 
-class AddTeamContent(DialogContent):
+class AddTeamContent(AddDialogContent):
     def __init__(self, **kwargs):
         self.data_table = "team"
         self.items = [
@@ -694,7 +735,7 @@ class AddTeamContent(DialogContent):
         super(AddTeamContent, self).__init__(**kwargs)
 
 
-class AddCategoryContent(DialogContent):
+class AddCategoryContent(AddDialogContent):
     def __init__(self, **kwargs):
         self.data_table = "category"
         self.items = [
@@ -703,7 +744,7 @@ class AddCategoryContent(DialogContent):
         super(AddCategoryContent, self).__init__(**kwargs)
 
 
-class AddCityContent(DialogContent):
+class AddCityContent(AddDialogContent):
     def __init__(self, **kwargs):
         self.data_table = "city"
         self.items = [
@@ -749,8 +790,8 @@ class ExpansionGridLayout(MDGridLayout):
 class TextField(MDTextField):
     def __init__(self, **kwargs):
         self.parent_dialog = kwargs.pop('parent_', None)
-        text = kwargs.pop('text', None)
-        instr = kwargs.pop('instruction', None)
+        text = kwargs.pop('text', '')
+        instr = kwargs.pop('instruction', {})
         self.size_hint_x = instr.pop('size_hint_x', 1)
 
         super(TextField, self).__init__()
@@ -761,9 +802,9 @@ class TextField(MDTextField):
         self.required = instr.pop('notnull', False)
         self.helper_text_mode = "on_error"
 
-        self.data_key = instr.pop('data_key', None)
-        self.data_table = instr.pop('data_table', None)
-        self.what_fields_child_fill = instr.pop('what_fields_child_fill', None)
+        self.data_key = instr.pop('data_key', '')
+        self.data_table = instr.pop('data_table', '')
+        self.what_fields_child_fill = instr.pop('what_fields_child_fill', [])
         self.add_text_in_parent = instr.pop('add_text_in_parent', False)
 
         self.have_drop_menu = False
@@ -1052,14 +1093,36 @@ class TFWithDrop(TextField):
         self.add_data_dialog.open()
 
 
-class GamePassedCheck(CheckBox):
+class GameCheck(CheckBox):
     def __init__(self, **kwargs):
         instr = kwargs.pop('instruction')
         self.size_hint_x = instr.pop('size_hint_x', 1)
         self.data_key = instr.pop('data_key')
         # self.color = app.theme_cls.primary_color
 
-        super(GamePassedCheck, self).__init__()
+        super(GameCheck, self).__init__()
+
+
+class LabelWithChange(BoxLayout):
+    def __init__(self, game=None, **kwargs):
+        self.orientation = "horizontal"
+        self.padding = 10
+        super(LabelWithChange, self).__init__()
+
+        self.name = kwargs.pop("text", '')
+        self.value = game.date.strftime("%d.%m.%Y %H:%M")
+        self.label = MDLabel(text=f"{self.name}:", size_hint_x=0.3)
+        self.label_value = MDLabel(text=f"{self.value}")
+        self.button = MDFlatButton(text="CHANGE", on_press=self.change)
+
+        self.add_widget(self.label)
+        self.add_widget(self.label_value)
+        self.add_widget(self.button)
+
+    def change(self, event):
+        self.remove_widget(self.label_value)
+        self.label_value = DateTF()
+        self.add_widget(self.label_value, index=1)
 
 
 class MainApp(MDApp):
