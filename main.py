@@ -279,7 +279,6 @@ class AddDialogWindow(DialogWindow):
         """Parameters:
                 type_(str) - тип создаваемого MDDialog. type_ может принимать значения: 
                                                             games, referee, stadium, league, category, city, team."""
-        print(kwargs)
         type_ = kwargs.pop('type_')
 
         title = " ".join(['Add', type_])
@@ -320,7 +319,8 @@ class AddDialogWindow(DialogWindow):
 
 
 class DialogContent(RecycleView):
-    def __init__(self):
+    def __init__(self, **kwargs):
+        self.shifting_focus = kwargs.pop("shifting_focus", False)
         super(DialogContent, self).__init__()
 
         self.children_ = []
@@ -346,9 +346,6 @@ class DialogContent(RecycleView):
                 self._add_items_in_box(item, box)
 
             elif type(item) == dict:
-                if type(box) is ExpansionGridLayout:
-                    item.pop('visible', False)
-
                 class_ = item.pop('class', '')
                 type_ = item.pop('type', '')
 
@@ -389,7 +386,7 @@ class DialogContent(RecycleView):
                     # заполняет уже имеющиеся данные в строке, если есть
                     text = self.filled_field.pop(item['data_key'], '')
 
-                    self._add_textfield(type_, box, parent_=self, instruction=item, text=text)
+                    self._add_textfield(type_, box, parent_=self, **item, text=text)
 
                 elif class_ == "checkbox":
                     self._add_checkbutton(item, box)
@@ -417,7 +414,7 @@ class DialogContent(RecycleView):
             self._add_widget(TFWithoutDrop(**kwargs), box)
 
     def _add_checkbutton(self, instr: dict, box: Layout):
-        self._add_widget(GameCheck(instruction=instr), box)
+        self._add_widget(GameCheck(**instr), box)
 
     def _add_label(self, instr: dict, box: Layout):
         size_hint_x = instr.pop('size_hint_x', 1)
@@ -426,7 +423,7 @@ class DialogContent(RecycleView):
         self._add_widget(Label(text=text, size_hint_x=size_hint_x), box)
 
     def _add_label_with_change(self, instr: dict, box: Layout):
-        self._add_widget(LabelWithChange(**instr, game=self.game), box)
+        self._add_widget(LabelWithChange(parent_=self, **instr, game=self.game), box)
 
     def _add_widget(self, widget, box: Layout):
         box.add_widget(widget)
@@ -459,7 +456,7 @@ class DialogContent(RecycleView):
         return self.default_item_height * count_items
 
     def set_next_focus(self, previous_widget):
-        """Устанавливает фокус на следующем виджете, если он не заполнен."""
+        """Устанавливает фокус на следующем виджете, если он не заполнен и виден на экране."""
         widgets = self.children_
         start_inx = widgets.index(previous_widget)
 
@@ -481,8 +478,6 @@ class DialogContent(RecycleView):
 
 class InfoDialogContent(DialogContent):
     def __init__(self, **kwargs):
-        print(self.game)
-
         super(InfoDialogContent, self).__init__()
 
 
@@ -497,7 +492,7 @@ class AddDialogContent(DialogContent):
         self.caller_ = kwargs.pop('caller_', None)
         self.filled_field = kwargs.pop('filled_field', {})
 
-        super(AddDialogContent, self).__init__()
+        super(AddDialogContent, self).__init__(shifting_focus=True)
 
     def update_db(self) -> bool:
         """Обрабатывает полученные из полей данные и отправляет на обновление БД.
@@ -641,33 +636,33 @@ class AddGameContent(AddDialogContent):
                 {'class': 'expansionpanel', 'panel_text': 'Team', 'cols': 2},
                 [
                     {'name': 'Home team', 'class': 'textfield', 'type': 'with_dropmenu',
-                     'what_fields_child_fill': ['name'],
+                     'what_fields_child_fill': ['name'], 'visible': False,
                      'data_table': 'team', 'data_key': 'team_home'},
                     {'name': 'Year home team', 'class': 'textfield', 'type': 'age', 'data_key': 'team_home_year',
-                     'size_hint_x': 0.35},
+                     'size_hint_x': 0.35, 'visible': False},
 
                 ],
                 [
                     {'name': 'Guest team', 'class': 'textfield', 'type': 'with_dropmenu',
-                     'what_fields_child_fill': ['name'],
+                     'what_fields_child_fill': ['name'], 'visible': False,
                      'data_table': 'team', 'data_key': 'team_guest'},
                     {'name': 'Year guest team', 'class': 'textfield', 'type': 'age', 'data_key': 'team_guest_year',
-                     'size_hint_x': 0.35}
+                     'size_hint_x': 0.35, 'visible': False}
                 ],
                 {'name': 'League', 'class': 'textfield', 'type': 'with_dropmenu', 'size_hint_x': 0.8,
-                 'what_fields_child_fill': ['name'],
+                 'what_fields_child_fill': ['name'], 'visible': False,
                  'data_table': 'league', 'data_key': 'league_id'},
             ],
             [
                 {'class': 'expansionpanel', 'panel_text': 'Referee'},
                 {'name': 'First referee', 'class': 'textfield', 'type': 'with_dropmenu',
-                 'what_fields_child_fill': ['second_name', 'first_name', 'third_name'],
+                 'what_fields_child_fill': ['second_name', 'first_name', 'third_name'], 'visible': False,
                  'data_table': 'referee', 'data_key': 'referee_first'},
                 {'name': 'Second referee', 'class': 'textfield', 'type': 'with_dropmenu',
-                 'what_fields_child_fill': ['second_name', 'first_name', 'third_name'],
+                 'what_fields_child_fill': ['second_name', 'first_name', 'third_name'], 'visible': False,
                  'data_table': 'referee', 'data_key': 'referee_second'},
                 {'name': 'Reserve referee', 'class': 'textfield', 'type': 'with_dropmenu',
-                 'what_fields_child_fill': ['second_name', 'first_name', 'third_name'],
+                 'what_fields_child_fill': ['second_name', 'first_name', 'third_name'], 'visible': False,
                  'data_table': 'referee', 'data_key': 'referee_reserve'}
             ],
             [
@@ -783,6 +778,7 @@ class ExpansionPanel(MDExpansionPanel):
 
 
 class ExpansionGridLayout(MDGridLayout):
+    """Класс создан для разделения отдельного GridLayout и в составе ExpansionPanel."""
     def __init__(self, **kwargs):
         super(ExpansionGridLayout, self).__init__(**kwargs)
 
@@ -791,26 +787,24 @@ class TextField(MDTextField):
     def __init__(self, **kwargs):
         self.parent_dialog = kwargs.pop('parent_', None)
         text = kwargs.pop('text', '')
-        instr = kwargs.pop('instruction', {})
-        self.size_hint_x = instr.pop('size_hint_x', 1)
+        self.size_hint_x = kwargs.pop('size_hint_x', 1)
+        self.visible = kwargs.pop("visible", True)
 
         super(TextField, self).__init__()
 
         self.set_text(self, text)
 
-        self.name = self.hint_text = instr.pop('name', '').capitalize()
-        self.required = instr.pop('notnull', False)
+        self.name = self.hint_text = kwargs.pop('name', '').capitalize()
+        self.required = kwargs.pop('notnull', False)
         self.helper_text_mode = "on_error"
 
-        self.data_key = instr.pop('data_key', '')
-        self.data_table = instr.pop('data_table', '')
-        self.what_fields_child_fill = instr.pop('what_fields_child_fill', [])
-        self.add_text_in_parent = instr.pop('add_text_in_parent', False)
+        self.data_key = kwargs.pop('data_key', '')
+        self.data_table = kwargs.pop('data_table', '')
+        self.what_fields_child_fill = kwargs.pop('what_fields_child_fill', [])
+        self.add_text_in_parent = kwargs.pop('add_text_in_parent', False)
 
         self.have_drop_menu = False
         self.change_focus = False
-
-        self.visible = instr.pop("visible", True)
 
     def on_focus_(self):
         pass
@@ -822,12 +816,12 @@ class TextField(MDTextField):
         pass
 
     def on_text_validate(self):
-        """После ввода текста устанавливает фокус на слудующем поле ввода."""
+        """После ввода текста устанавливает фокус на следующем поле ввода."""
         super(TextField, self).on_text_validate()
         self.set_next_focus()
 
     def set_next_focus(self):
-        if self.change_focus:
+        if self.change_focus and self.parent_dialog.shifting_focus:
             self.parent_dialog.set_next_focus(self)
 
 
@@ -1095,9 +1089,8 @@ class TFWithDrop(TextField):
 
 class GameCheck(CheckBox):
     def __init__(self, **kwargs):
-        instr = kwargs.pop('instruction')
-        self.size_hint_x = instr.pop('size_hint_x', 1)
-        self.data_key = instr.pop('data_key')
+        self.size_hint_x = kwargs.pop('size_hint_x', 1)
+        self.data_key = kwargs.pop('data_key', '')
         # self.color = app.theme_cls.primary_color
 
         super(GameCheck, self).__init__()
@@ -1109,20 +1102,48 @@ class LabelWithChange(BoxLayout):
         self.padding = 10
         super(LabelWithChange, self).__init__()
 
+        self.parent_ = kwargs.pop("parent_")
         self.name = kwargs.pop("text", '')
-        self.value = game.date.strftime("%d.%m.%Y %H:%M")
+        self.value_cls = game.date.strftime("%d.%m.%Y %H:%M")
         self.label = MDLabel(text=f"{self.name}:", size_hint_x=0.3)
-        self.label_value = MDLabel(text=f"{self.value}")
-        self.button = MDFlatButton(text="CHANGE", on_press=self.change)
+        self.label_value = MDLabel(text=f"{self.value_cls}")
+        self.new_label_value = None
+
+        self.change_btn = MDFlatButton(text="CHANGE", on_release=self.change_click,
+                                       theme_text_color="Custom", text_color=app.theme_cls.primary_color)
+        self.add_btn = MDRaisedButton(text="ADD", on_release=self.add_click)
+        self.cancel_btn = MDFlatButton(text="Cancel", on_release=self.cancel_click,
+                                       theme_text_color="Custom", text_color=app.theme_cls.primary_color)
 
         self.add_widget(self.label)
         self.add_widget(self.label_value)
-        self.add_widget(self.button)
+        self.add_widget(self.change_btn)
 
-    def change(self, event):
-        self.remove_widget(self.label_value)
-        self.label_value = DateTF()
-        self.add_widget(self.label_value, index=1)
+        self.changed_widget = [self.label_value, self.change_btn]
+
+    def change_click(self, event):
+        self.clean()
+        self.new_label_value = DateTF(parent_=self.parent_)
+        self.add_widget_(self.cancel_btn)
+        self.add_widget_(self.add_btn)
+        self.add_widget_(self.new_label_value, index=2)
+
+    def add_widget_(self, widget, index=0):
+        self.changed_widget.append(widget)
+        self.add_widget(widget, index=index)
+
+    def add_click(self, event):
+        self.new_label_value.on_text_validate()
+
+    def cancel_click(self, event):
+        self.clean()
+        self.add_widget_(self.label_value)
+        self.add_widget_(self.change_btn)
+
+    def clean(self):
+        for widget in self.changed_widget:
+            self.remove_widget(widget)
+        self.changed_widget.clear()
 
 
 class MainApp(MDApp):
