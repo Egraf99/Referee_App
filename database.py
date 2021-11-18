@@ -11,6 +11,8 @@ def take_one_data(what_return: str, table: str, condition: dict[str, Any] = None
             what_return(str) - строка, содержащая название возвращаемых столбцов.
             table(str) - название таблицы.
             condition(dict) - словарь условий. SELECT ... WHERE X = Y (X - ключ, Y - значение).
+            order(dict) - словарь сортировки. Доступные ключи - ASC и DESC.
+                            ORDER BY Y X (X - ключ, Y - значения).
 
         Return:
             name - возвращаемое значение."""
@@ -26,6 +28,8 @@ def take_many_data(what_return: str, table: str, condition: dict[str, Any] = Non
                 what_return(str) - строка, содержащая название возвращаемых столбцов.
                 table(str) - название таблицы.
                 condition(dict) - словарь условий. SELECT ... WHERE X = Y (X - ключ, Y - значение).
+                order(dict) - словарь сортировки. Доступные ключи - ASC и DESC.
+                            ORDER BY Y X (X - ключ, Y - значения).
 
             Return:
                 name - список возвращаемых значений."""
@@ -60,10 +64,25 @@ class ConnDB:
     def games(self) -> list[dict]:
         """Возвращает все данные по всем играм в виде списка словарей."""
 
-        column_names = ["id", "league_id", "stadium_id", "team_home", "team_guest",
-                        "referee_chief", "referee_first", "referee_second", "referee_reserve",
-                        "game_passed", "payment", "pay_done", "year", "month", "day", "time",
-                        "team_home_year", "team_guest_year"]
+        column_names = ["id",
+                        "league_id",
+                        "stadium_id",
+                        "team_home",
+                        "team_guest",
+                        "referee_chief",
+                        "referee_first",
+                        "referee_second",
+                        "referee_reserve",
+                        "game_passed",
+                        "payment",
+                        "pay_done",
+                        "year",
+                        "month",
+                        "day",
+                        "time",
+                        "team_home_year",
+                        "team_guest_year",
+                        ]
 
         sql = f'''SELECT * FROM Games ORDER BY year, month, day ASC, time DESC'''
 
@@ -75,43 +94,26 @@ class ConnDB:
         return games_dict_of_kwargs
 
     def take_data(self, what_return: str, table: str,
-                   conditions: dict = None,
-                   one_value: bool = False, order: dict = None) -> Union[str, list]:
+                  conditions: dict = None,
+                  one_value: bool = False, order: dict = None) -> Union[str, list]:
         values = None
         if conditions:
-            name_list = []
-            values = []
-            for name in conditions:
-                name_list.append(f'{name} = ?')
-                values.append(conditions[name])
-
-            conditions_str = " AND ".join(name_list)
-
+            conditions_str, values = self._convert_conditions(conditions)
             sql = f'''SELECT {what_return} FROM {table} WHERE {conditions_str}'''
 
         else:
             sql = f'''SELECT {what_return} FROM {table}'''
 
         if order:
-            order_sql = []
-            sql += " ORDER BY "
-            for key in order:
-                assert key in ["ASC", "DESC"], "order keys must be 'ASC' or 'DESC'"
-                assert type(order[key]) == list, "order value type must be list"
-
-                order_sql.append(f"{', '.join(order[key])} {key}")
-            sql += ", ".join(order_sql)
-
+            order_str = self._convert_order(order)
+            sql += f''' ORDER BY {order_str}'''
         # print(sql)
         return self._select_request(sql, values, one_value=one_value)
 
     def insert(self, table: str, data: dict) -> None:
         """Добавляет в БД заданные данные."""
 
-        self._convert_special_date(data)
-
-        for k, v in data.items():
-            data[k] = int(v) if type(v) == str and v.isdigit() else v
+        self._convert_data(data)
 
         column = ','.join(d for d in data.keys())
         count_values = ','.join('?' * len(data.values()))
@@ -119,12 +121,48 @@ class ConnDB:
 
         sql = f'''INSERT INTO {table}({column}) VALUES ({count_values}); '''
 
-        print(sql, values)
+        self._request(sql, values)
 
-        self._insert_request(sql, values)
+    def update(self, table: str, data: dict, conditions: dict):
+        """Обновляет БД."""
+
+        self._convert_data(data)
+
+        column = ','.join(f'{d}=?' for d in data.keys())
+        values = [d for d in data.values()]
+
+        if conditions:
+            conditions_str, conditions_value = self._convert_conditions(conditions)
+            values.append(*conditions_value)
+            sql = f'''UPDATE {table} SET {column} WHERE {conditions_str}'''
+        else:
+            sql = f'''UPDATE {table} SET {column}'''
+
+        print(sql, values)
+        self._request(sql, values)
 
     @staticmethod
-    def _convert_special_date(data: dict) -> None:
+    def _convert_order(order) -> str:
+        order_sql = []
+        for key in order:
+            assert key in ["ASC", "DESC"], "order keys must be 'ASC' or 'DESC'"
+            assert type(order[key]) == list, "order value type must be list"
+
+            order_sql.append(f"{', '.join(order[key])} {key}")
+        return ", ".join(order_sql)
+
+    @staticmethod
+    def _convert_conditions(conditions: dict):
+        name_list = []
+        values = []
+        for name in conditions:
+            name_list.append(f'{name} = ?')
+            values.append(conditions[name])
+
+        return " AND ".join(name_list), values
+
+    @staticmethod
+    def _convert_data(data: dict) -> None:
         """Преаобразует специальные поля (дата, время, телефон) в формат значений БД."""
         if "date" in data.keys():
             date = data.pop("date").split(" ")
@@ -149,6 +187,9 @@ class ConnDB:
 
             data['phone'] = int(phone_)
 
+        for k, v in data.items():
+            data[k] = int(v) if type(v) == str and v.isdigit() else v
+
     def _select_request(self, sql: str, values: Optional[list] = None, one_value: bool = False) -> list:
         self.cursor = sqlite3.connect('referee.db').cursor()
         if values:
@@ -165,7 +206,7 @@ class ConnDB:
 
         return data
 
-    def _insert_request(self, sql, values):
+    def _request(self, sql, values):
         self.conn = sqlite3.connect('referee.db')
         self.cur = self.conn.cursor()
         self.cur.execute(sql, values)
@@ -313,5 +354,5 @@ class City:
 
 
 if __name__ == '__main__':
-    print(take_many_data("second_name", "Referee", order={"ASC": ["second_name", "first_name"]}))
+    # print(take_many_data("second_name", "Referee", order={"ASC": ["second_name", "first_name"]}))
     print("не тот файл, дурачок :)")

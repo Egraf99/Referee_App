@@ -210,7 +210,7 @@ class DropMenu(MDDropdownMenu):
         else:
             self.items = [{"text": f'Add "{added_item}" in base',
                            "viewclass": "OneLineListItem",
-                           "on_release": lambda: text_list.drop_menu_add_data_and_close()}]
+                           "on_release": lambda: text_list.drop_menu_add_data()}]
 
     def update(self):
         self.set_menu_properties()
@@ -246,30 +246,6 @@ class InfoDialogWindow(DialogWindow):
     def _set_content_cls(self, type_, **kwargs):
         if type_ == "game":
             self.content_cls = InfoGameContent(**kwargs)
-        else:
-            raise AttributeError("Incorrect type_")
-
-
-class ChangeDialogWindow(DialogWindow):
-    def __init__(self, **kwargs):
-        """Parameters:
-            type_(str) - тип создаваемого MDDialog. type_ может принимать значения:
-                                                        games, referee, stadium, league, category, city, team."""
-
-        type_ = kwargs.pop('type_')
-
-        title = " ".join(['Info', type_])
-        self.title = title
-
-        self._set_content_cls(type_, **kwargs)
-        self.buttons = [MDFlatButton(text="CANCEL", on_release=self.dismiss, theme_text_color="Custom",
-                                     text_color=app.theme_cls.primary_color)]
-
-        super(ChangeDialogWindow, self).__init__()
-
-    def _set_content_cls(self, type_, **kwargs):
-        if type_ == "referee":
-            self.content_cls = AddRefereeContent(**kwargs)
         else:
             raise AttributeError("Incorrect type_")
 
@@ -319,8 +295,7 @@ class AddDialogWindow(DialogWindow):
 
 
 class DialogContent(RecycleView):
-    def __init__(self, **kwargs):
-        self.shifting_focus = kwargs.pop("shifting_focus", False)
+    def __init__(self):
         super(DialogContent, self).__init__()
 
         self.children_ = []
@@ -395,7 +370,7 @@ class DialogContent(RecycleView):
                     self._add_label(item, box)
 
                 elif class_ == "label_with_change":
-                    self._add_label_with_change(item, box)
+                    self._add_label_with_change(type_, item, box)
 
     def _add_textfield(self, type_, box, **kwargs):
         if type_ == 'date':
@@ -422,8 +397,11 @@ class DialogContent(RecycleView):
 
         self._add_widget(Label(text=text, size_hint_x=size_hint_x), box)
 
-    def _add_label_with_change(self, instr: dict, box: Layout):
-        self._add_widget(LabelWithChange(parent_=self, **instr, game=self.game), box)
+    def _add_label_with_change(self, type_, instr: dict, box: Layout):
+        if type_ == "date":
+            self._add_widget(DataLWC(parent_=self, game=self.game, **instr), box)
+        elif type_ == "time":
+            self._add_widget(TimeLWC(parent_=self, game=self.game, **instr), box)
 
     def _add_widget(self, widget, box: Layout):
         box.add_widget(widget)
@@ -455,25 +433,8 @@ class DialogContent(RecycleView):
     def _get_items_height(self, count_items: int):
         return self.default_item_height * count_items
 
-    def set_next_focus(self, previous_widget):
-        """Устанавливает фокус на следующем виджете, если он не заполнен и виден на экране."""
-        widgets = self.children_
-        start_inx = widgets.index(previous_widget)
-
-        for inx, widget in enumerate(widgets[start_inx:]):
-            inx += start_inx
-
-            try:
-                widgets[inx + 1]
-            except IndexError:
-                continue
-
-            if isinstance(widgets[inx + 1], TextField)\
-                    and widgets[inx + 1].visible and not widgets[inx + 1].text:
-                next_widget = widgets[inx + 1]
-                next_widget.focus = True
-                self.scroll_to(next_widget)
-                break
+    def on_tf_text_validate(self, caller):
+        """Вызывается при вводе текста в дочерних полях ввода."""
 
 
 class InfoDialogContent(DialogContent):
@@ -492,7 +453,7 @@ class AddDialogContent(DialogContent):
         self.caller_ = kwargs.pop('caller_', None)
         self.filled_field = kwargs.pop('filled_field', {})
 
-        super(AddDialogContent, self).__init__(shifting_focus=True)
+        super(AddDialogContent, self).__init__()
 
     def update_db(self) -> bool:
         """Обрабатывает полученные из полей данные и отправляет на обновление БД.
@@ -538,6 +499,26 @@ class AddDialogContent(DialogContent):
 
         return True
 
+    def on_tf_text_validate(self, caller):
+        """Устанавливает фокус на следующем виджете, если он не заполнен и виден на экране."""
+        widgets = self.children_
+        start_inx = widgets.index(caller)
+
+        for inx, widget in enumerate(widgets[start_inx:]):
+            inx += start_inx
+
+            try:
+                widgets[inx + 1]
+            except IndexError:
+                continue
+
+            if isinstance(widgets[inx + 1], TextField)\
+                    and widgets[inx + 1].visible and not widgets[inx + 1].text:
+                next_widget = widgets[inx + 1]
+                next_widget.focus = True
+                self.scroll_to(next_widget)
+                break
+
     @staticmethod
     def _check_text_field(field) -> Tuple[dict, Optional[str], bool]:
         """Анализирует field и возвращает его данные.
@@ -557,7 +538,7 @@ class AddDialogContent(DialogContent):
         required_not_fill = False
 
         if field.add_text_in_parent:
-            # запоминает текст из полей, данные из которых будут записаны в вызывающем поле
+            # запоминает текст из полей, данные из которых будут записаны в вызывающем родительском поле
             caller_field_text = field.text
 
         if field.required and not field.text:  # ищет необходимые не заполненные поля
@@ -606,11 +587,8 @@ class InfoGameContent(InfoDialogContent):
     def __init__(self, **kwargs):
         self.game = kwargs.pop("data_cls", None)
         self.items = [
-            [
-                {'class': 'boxlayout', 'orientation': 'horizontal', 'spacing': 10},
-                {'text': 'Date', 'class': 'label_with_change'}
-            ]
-
+            {'class': 'label_with_change', 'type': 'date', 'text': 'Date'},
+            {'class': 'label_with_change', 'type': 'time', 'text': 'Time'},
         ]
 
         super(InfoGameContent, self).__init__(**kwargs)
@@ -779,8 +757,6 @@ class ExpansionPanel(MDExpansionPanel):
 
 class ExpansionGridLayout(MDGridLayout):
     """Класс создан для разделения отдельного GridLayout и в составе ExpansionPanel."""
-    def __init__(self, **kwargs):
-        super(ExpansionGridLayout, self).__init__(**kwargs)
 
 
 class TextField(MDTextField):
@@ -810,26 +786,22 @@ class TextField(MDTextField):
         pass
 
     def on_double_tap(self):
-        self.text = ""
+        self.text = ''
 
     def on_cursor_(self):
         pass
 
+    def check_valid_text(self):
+        """Проверяет введеный текст."""
+
     def on_text_validate(self):
         """После ввода текста устанавливает фокус на следующем поле ввода."""
         super(TextField, self).on_text_validate()
-        self.set_next_focus()
-
-    def set_next_focus(self):
-        if self.change_focus and self.parent_dialog.shifting_focus:
-            self.parent_dialog.set_next_focus(self)
+        self.parent_dialog.on_tf_text_validate(self)
 
 
 class TFWithoutDrop(TextField):
-    def on_text_validate(self):
-        super(TextField, self).on_text_validate()
-        self.change_focus = True
-        self.set_next_focus()
+    pass
 
 
 class PhoneTF(TFWithoutDrop):
@@ -874,14 +846,17 @@ class PhoneTF(TFWithoutDrop):
             super(PhoneTF, self).do_backspace(from_undo=from_undo, mode='bkspc')
         super(PhoneTF, self).do_backspace(from_undo=from_undo, mode='bkspc')
 
-    def on_text_validate(self):
+    def check_valid_text(self) -> bool:
         pat = "^(\+7|8)\([0-9]{3}\)[0-9]{3}(-[0-9]{2}){2}$"
 
         if not re.match(pat, self.text):
-            # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-            # делаем красным очищаем и не меняем фокус
             self.text = ""
+            return False
 
+        return True
+
+    def on_text_validate(self):
+        self.check_valid_text()
         super(PhoneTF, self).on_text_validate()
 
 
@@ -912,12 +887,16 @@ class DateTF(TFWithoutDrop):
             super(DateTF, self).do_backspace(from_undo=from_undo, mode='bkspc')
         super(DateTF, self).do_backspace(from_undo=from_undo, mode='bkspc')
 
-    def on_text_validate(self):
+    def check_valid_text(self):
         pat = "^(0?[1-9]|[12][0-9]|3[01]).(0?[0-9]|1[012]).(19|20)?[0-9]{2}$"
 
         if not re.match(pat, self.text):
             self.text = ""
+            return False
+        return True
 
+    def on_text_validate(self):
+        self.check_valid_text()
         super(DateTF, self).on_text_validate()
 
 
@@ -948,12 +927,16 @@ class TimeTF(TFWithoutDrop):
             super(TimeTF, self).do_backspace(from_undo=from_undo, mode='bkspc')
         super(TimeTF, self).do_backspace(from_undo=from_undo, mode='bkspc')
 
-    def on_text_validate(self):
+    def check_valid_text(self):
         pat = "^([01][1-9]|2[0-4]):[0-6][0-9]$"
 
         if not re.match(pat, self.text):
             self.text = ""
+            return False
+        return True
 
+    def on_text_validate(self):
+        self.check_valid_text()
         super(TimeTF, self).on_text_validate()
 
 
@@ -998,8 +981,7 @@ class TFWithDrop(TextField):
     def add_item_in_text_input(self, text_item):
         self.text = text_item
         self.drop_menu.dismiss()
-        self.change_focus = True
-        self.set_next_focus()
+        super(TFWithDrop, self).on_text_validate()
 
     def on_focus_(self):
         """Открытие всплывающего меню."""
@@ -1051,18 +1033,18 @@ class TFWithDrop(TextField):
         text_dropmenu = self.drop_menu.items[0]["text"]
 
         if text_dropmenu.split()[0] == "Add":
-            filled_fields = self._make_dict_filled_field_in_children()
+            self.drop_menu_add_data()
             self.text = ''
-            self._drop_menu_add_data(filled_fields)
 
         else:
             self.text = text_dropmenu
-            self.change_focus = True
 
-        self.drop_menu.dismiss()
         super(TFWithDrop, self).on_text_validate()
 
     def _make_dict_filled_field_in_children(self) -> dict:
+        """Создает словарь заволненных полей.
+            Ключи - self.what_fields_child_fill,
+            Значения - self.text."""
         filled_fields = {}
 
         if len(self.what_fields_child_fill) == 1:
@@ -1077,12 +1059,11 @@ class TFWithDrop(TextField):
 
         return filled_fields
 
-    def drop_menu_add_data_and_close(self):
-        self._drop_menu_add_data()
+    def drop_menu_add_data(self):
+        """Создает Dialog для добавления новых данных в БД."""
+        filled_fields = self._make_dict_filled_field_in_children()
         self.drop_menu.dismiss()
 
-    def _drop_menu_add_data(self, filled_fields=None):
-        """Создает Dialog для добавления новых данных в БД."""
         self.add_data_dialog = AddDialogWindow(type_=self.data_table, filled_field=filled_fields, caller_=self)
         self.add_data_dialog.open()
 
@@ -1102,48 +1083,85 @@ class LabelWithChange(BoxLayout):
         self.padding = 10
         super(LabelWithChange, self).__init__()
 
+        self.game = game
         self.parent_ = kwargs.pop("parent_")
-        self.name = kwargs.pop("text", '')
-        self.value_cls = game.date.strftime("%d.%m.%Y %H:%M")
-        self.label = MDLabel(text=f"{self.name}:", size_hint_x=0.3)
-        self.label_value = MDLabel(text=f"{self.value_cls}")
-        self.new_label_value = None
+        self.text = kwargs.pop("text", '')
 
-        self.change_btn = MDFlatButton(text="CHANGE", on_release=self.change_click,
+        self.label_value = ObjectProperty()
+        self.label = ObjectProperty()
+        self.btn_change = ObjectProperty()
+        self.btn_add = ObjectProperty()
+        self.btn_cancel = ObjectProperty()
+        self.widgets_mode_view = ObjectProperty()
+        self.widgets_mode_change = ObjectProperty()
+
+    def show(self):
+        self.label_value = MDLabel(text=self.value)
+        self.label = MDLabel(text=f"{self.text}:", size_hint_x=0.3)
+        self.btn_change = MDFlatButton(text="CHANGE", on_release=self.click_change,
                                        theme_text_color="Custom", text_color=app.theme_cls.primary_color)
-        self.add_btn = MDRaisedButton(text="ADD", on_release=self.add_click)
-        self.cancel_btn = MDFlatButton(text="Cancel", on_release=self.cancel_click,
+        self.btn_add = MDRaisedButton(text="ADD", on_release=self.click_add)
+        self.btn_cancel = MDFlatButton(text="Cancel", on_release=self.click_cancel,
                                        theme_text_color="Custom", text_color=app.theme_cls.primary_color)
 
-        self.add_widget(self.label)
-        self.add_widget(self.label_value)
-        self.add_widget(self.change_btn)
+        self.widgets_mode_view = [self.label,
+                                  self.label_value,
+                                  self.btn_change,
+                                  ]
 
-        self.changed_widget = [self.label_value, self.change_btn]
+        self.widgets_mode_change = [self.label,
+                                    self.text_field,
+                                    self.btn_cancel,
+                                    self.btn_add,
+                                    ]
 
-    def change_click(self, event):
-        self.clean()
-        self.new_label_value = DateTF(parent_=self.parent_)
-        self.add_widget_(self.cancel_btn)
-        self.add_widget_(self.add_btn)
-        self.add_widget_(self.new_label_value, index=2)
+        self.change_mode("view")
 
-    def add_widget_(self, widget, index=0):
-        self.changed_widget.append(widget)
-        self.add_widget(widget, index=index)
+    def change_mode(self, mode: str):
+        assert mode in ["change", "view"]
+        self.clear_widgets()
+        if mode == "change":
+            widgets = self.widgets_mode_change
+        elif mode == "view":
+            widgets = self.widgets_mode_view
+        else:
+            raise AttributeError("mode must be 'change' or 'view'")
 
-    def add_click(self, event):
-        self.new_label_value.on_text_validate()
+        for widget in widgets:
+            self.add_widget(widget)
 
-    def cancel_click(self, event):
-        self.clean()
-        self.add_widget_(self.label_value)
-        self.add_widget_(self.change_btn)
+    def click_change(self, event=None):
+        self.change_mode("change")
 
-    def clean(self):
-        for widget in self.changed_widget:
-            self.remove_widget(widget)
-        self.changed_widget.clear()
+    def click_add(self, event=None):
+        if not self.text_field.check_valid_text():
+            self.text_field.text = 'incorrect'
+        else:
+            DB.update("Games", {self.data_key: self.text_field.text}, {"id": self.game.id_in_db})
+            self.label_value.text = self.text_field.text
+            self.change_mode('view')
+            app.app_screen.games_screen.table_games.update()
+
+    def click_cancel(self, event=None):
+        self.change_mode("view")
+
+
+class DataLWC(LabelWithChange):
+    def __init__(self, **kwargs):
+        super(DataLWC, self).__init__(**kwargs)
+        self.text_field = DateTF(parent_=self.parent_)
+        self.data_key = "date"
+        self.value = self.game.date.strftime("%d.%m.%Y")
+        self.show()
+
+
+class TimeLWC(LabelWithChange):
+    def __init__(self, **kwargs):
+        super(TimeLWC, self).__init__(**kwargs)
+        self.text_field = TimeTF(parent_=self.parent_)
+        self.data_key = "time"
+        self.value = self.game.date.strftime("%H:%M")
+        self.show()
 
 
 class MainApp(MDApp):
