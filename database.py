@@ -1,10 +1,10 @@
 import sqlite3
 import datetime
-from typing import Optional, Union, Any
+from typing import Optional, Union, Any, Dict, List
 from kivymd.color_definitions import colors
 
 
-def take_one_data(what_return: str, table: str, condition: dict[str, Any] = None, order: dict = None) -> str:
+def take_one_data(what_return: str, table: str, condition: Dict[str, Any] = None, order: dict = None) -> str:
     """Возвращает одно (первое) значение из БД.
 
         Parameters:
@@ -21,7 +21,7 @@ def take_one_data(what_return: str, table: str, condition: dict[str, Any] = None
     return name[0] if name and name[0] else None
 
 
-def take_many_data(what_return: str, table: str, condition: dict[str, Any] = None, order: dict = None) -> list:
+def take_many_data(what_return: str, table: str, condition: Dict[str, Any] = None, order: dict = None) -> list:
     """Возвращает все значения из БД, подходящие по условиям.
 
             Parameters:
@@ -47,8 +47,8 @@ def take_name_from_db(table: str) -> list:
         data (list) - список полученных имен из БД."""
 
     try:
-        if table == "referee":
-            data = take_many_data("second_name||' '||first_name", table,
+        if table == "Referee":
+            data = take_many_data("second_name", table,
                                   order={"ASC": ["second_name", "first_name", "third_name"]})
         else:
             data = take_many_data("name", table, order={"ASC": ["name"]})
@@ -61,7 +61,7 @@ def take_name_from_db(table: str) -> list:
 
 class ConnDB:
     @property
-    def games(self) -> list[dict]:
+    def games(self) -> List[dict]:
         """Возвращает все данные по всем играм в виде списка словарей."""
 
         column_names = ["id",

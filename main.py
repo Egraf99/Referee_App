@@ -1,7 +1,7 @@
 import re
 
 from copy import deepcopy
-from abc import ABC
+from abc import ABC, ABCMeta, abstractmethod
 from math import ceil
 
 from typing import Optional, Any, Union, List, Tuple
@@ -193,37 +193,16 @@ class GamesTable(MDDataTable, TouchBehavior):
         return returned_list_of_data
 
 
-class DropMenu(MDDropdownMenu):
-    def __init__(self):
-        self.width_mult = dp(4)
-        self.max_height = dp(250)
-
-        super(DropMenu, self).__init__()
-
-    def set_items(self, text_list, list_items: list, added_item=None):
-        """Добавляет items в DropMenu."""
-        if list_items:
-            self.items = [{"text": f"{x}",
-                           "viewclass": "OneLineListItem",
-                           "on_release": lambda x=f"{x}": text_list.add_item_in_text_input(x),
-                           } for x in list_items]
-        else:
-            self.items = [{"text": f'Add "{added_item}" in base',
-                           "viewclass": "OneLineListItem",
-                           "on_release": lambda: text_list.drop_menu_add_data()}]
-
-    def update(self):
-        self.set_menu_properties()
-        if not self.parent:
-            self.open()
-
-
 class DialogWindow(MDDialog):
     def __init__(self):
         self.caller_ = None
         self.auto_dismiss = True
         self.type = "custom"
         super(DialogWindow, self).__init__()
+
+    @abstractmethod
+    def _set_content_cls(self, type_, **kwargs):
+        pass
 
 
 class InfoDialogWindow(DialogWindow):
@@ -269,16 +248,10 @@ class AddDialogWindow(DialogWindow):
 
         super(AddDialogWindow, self).__init__()
 
-    def _add_button_click(self, event) -> None:
-        """Вызывается при нажатии кнопки ADD"""
-        success = self.content_cls.update_db()
-        if success and self.caller_:
-            self.caller_.parent.parent.set_focus()
-
     def _set_content_cls(self, type_, **kwargs) -> None:
         if type_ == "game":
             self.content_cls = AddGameContent()
-        elif type_ == "referee":
+        elif type_.startswith("referee"):
             self.content_cls = AddRefereeContent(**kwargs)
         elif type_ == "stadium":
             self.content_cls = AddStadiumContent(**kwargs)
@@ -288,10 +261,16 @@ class AddDialogWindow(DialogWindow):
             self.content_cls = AddCategoryContent(**kwargs)
         elif type_ == "city":
             self.content_cls = AddCityContent(**kwargs)
-        elif type_ == "team":
+        elif type_.startswith("team"):
             self.content_cls = AddTeamContent(**kwargs)
         else:
-            raise AttributeError("Incorrect type_")
+            raise AttributeError(f"Incorrect type_ {type_}")
+
+    def _add_button_click(self, event) -> None:
+        """Вызывается при нажатии кнопки ADD"""
+        success = self.content_cls.update_db()
+        if success and self.caller_:
+            self.caller_.parent.parent.set_focus()
 
 
 class DialogContent(RecycleView):
@@ -300,6 +279,19 @@ class DialogContent(RecycleView):
 
         self.children_ = []
         self._add_items_in_box(self.items, self.ids.box)
+
+    def increase_box_height(self, count_items: int):
+        self.ids.box.height += self._get_items_height(count_items)
+
+    def reduce_box_height(self, count_items: int):
+        self.ids.box.height -= self._get_items_height(count_items)
+
+    def set_default_box_height(self):
+        self.ids.box.height = self.default_box_height
+
+    @abstractmethod
+    def on_tf_text_validate(self, caller):
+        """Вызывается при вводе текста в дочерних полях ввода."""
 
     def _add_items_in_box(self, items: list, box):
         """Добавляет items в главный BoxLayout.
@@ -358,10 +350,7 @@ class DialogContent(RecycleView):
                     box = box_
 
                 elif class_ == "textfield":
-                    # заполняет уже имеющиеся данные в строке, если есть
-                    text = self.filled_field.pop(item['data_key'], '')
-
-                    self._add_textfield(type_, box, parent_=self, **item, text=text)
+                    self._add_textfield(type_, box, parent_=self, **item)
 
                 elif class_ == "checkbox":
                     self._add_checkbutton(item, box)
@@ -383,6 +372,18 @@ class DialogContent(RecycleView):
             self._add_widget(YearTF(**kwargs), box)
         elif type_ == 'payment':
             self._add_widget(PaymentTF(**kwargs), box)
+        elif type_ == 'stadium':
+            self._add_widget(StadiumTF(**kwargs), box)
+        elif type_ == 'referee':
+            self._add_widget(RefereeTF(**kwargs), box)
+        elif type_ == 'team':
+            self._add_widget(TeamTF(**kwargs), box)
+        elif type_ == 'league':
+            self._add_widget(LeagueTF(**kwargs), box)
+        elif type_ == 'category':
+            self._add_widget(CategoryTF(**kwargs), box)
+        elif type_ == 'payment':
+            self._add_widget(PaymentTF(**kwargs), box)
         elif type_ == 'with_dropmenu':
             self._add_widget(TFWithDrop(**kwargs), box)
         else:
@@ -399,9 +400,9 @@ class DialogContent(RecycleView):
 
     def _add_label_with_change(self, type_, instr: dict, box: Layout):
         if type_ == "date":
-            self._add_widget(DataLWC(parent_=self, game=self.game, **instr), box)
+            self._add_widget(DataLWC(game=self.game, **instr), box)
         elif type_ == "time":
-            self._add_widget(TimeLWC(parent_=self, game=self.game, **instr), box)
+            self._add_widget(TimeLWC(game=self.game, **instr), box)
 
     def _add_widget(self, widget, box: Layout):
         box.add_widget(widget)
@@ -421,25 +422,16 @@ class DialogContent(RecycleView):
 
         return dp(self.default_box_height)
 
-    def increase_box_height(self, count_items: int):
-        self.ids.box.height += self._get_items_height(count_items)
-
-    def reduce_box_height(self, count_items: int):
-        self.ids.box.height -= self._get_items_height(count_items)
-
-    def set_default_box_height(self):
-        self.ids.box.height = self.default_box_height
-
     def _get_items_height(self, count_items: int):
         return self.default_item_height * count_items
-
-    def on_tf_text_validate(self, caller):
-        """Вызывается при вводе текста в дочерних полях ввода."""
 
 
 class InfoDialogContent(DialogContent):
     def __init__(self, **kwargs):
         super(InfoDialogContent, self).__init__()
+
+    def on_tf_text_validate(self, caller):
+        self.caller.check()
 
 
 class AddDialogContent(DialogContent):
@@ -451,9 +443,15 @@ class AddDialogContent(DialogContent):
                                               значением является добавляемый текст."""
 
         self.caller_ = kwargs.pop('caller_', None)
-        self.filled_field = kwargs.pop('filled_field', {})
+        filled_field = kwargs.pop('filled_field', {})
 
         super(AddDialogContent, self).__init__()
+        self._filled_children_field(filled_field)
+
+    def _filled_children_field(self, filled_field: dict):
+        for widget in self.children_:
+            if isinstance(widget, TextField) and widget.name_ in filled_field:
+                widget.text = filled_field[widget.name_]
 
     def update_db(self) -> bool:
         """Обрабатывает полученные из полей данные и отправляет на обновление БД.
@@ -495,7 +493,7 @@ class AddDialogContent(DialogContent):
 
         else:
             self.caller_.text = caller_field_text.strip()
-            open_snackbar(f"{self.caller_.name.title()} {self.caller_.text} successfully added")
+            open_snackbar(f"{self.caller_.hint_text.title()} {self.caller_.text} successfully added")
 
         return True
 
@@ -587,8 +585,8 @@ class InfoGameContent(InfoDialogContent):
     def __init__(self, **kwargs):
         self.game = kwargs.pop("data_cls", None)
         self.items = [
-            {'class': 'label_with_change', 'type': 'date', 'text': 'Date'},
-            {'class': 'label_with_change', 'type': 'time', 'text': 'Time'},
+            {'name': 'Date', 'class': 'label_with_change', 'type': 'date'},
+            {'name': 'Time', 'class': 'label_with_change', 'type': 'time'},
         ]
 
         super(InfoGameContent, self).__init__(**kwargs)
@@ -600,48 +598,31 @@ class AddGameContent(AddDialogContent):
         self.items = [
             [
                 {'class': 'boxlayout', 'orientation': 'horizontal', 'spacing': 10},
-                {'name': 'Date', 'class': 'textfield', 'type': 'date', 'data_key': 'date',
-                 'notnull': True, 'size_hint_x': 0.5},
-                {'name': 'Time', 'class': 'textfield', 'type': 'time', 'data_key': 'time',
-                 'notnull': True, 'size_hint_x': 0.5},
-                {'name': 'Stadium', 'class': 'textfield', 'type': 'with_dropmenu', 'what_fields_child_fill': ['name'],
-                 'data_table': 'stadium', 'data_key': 'stadium_id', 'notnull': True},
+                {'name': 'Date', 'class': 'textfield', 'type': 'date', 'notnull': True, 'size_hint_x': 0.5},
+                {'name': 'Time', 'class': 'textfield', 'type': 'time', 'notnull': True, 'size_hint_x': 0.5},
+                {'name': 'Stadium', 'class': 'textfield', 'type': 'stadium', 'notnull': True},
             ],
-            {'name': 'Chief referee', 'class': 'textfield', 'type': 'with_dropmenu',
-             'what_fields_child_fill': ['second_name', 'first_name', 'third_name'],
-             'data_table': 'referee', 'data_key': 'referee_chief', 'notnull': True},
+            {'name': 'Chief referee', 'class': 'textfield', 'type': 'referee', 'data_key': 'referee_chief', 'notnull': True},
             [
                 {'class': 'expansionpanel', 'panel_text': 'Team', 'cols': 2},
                 [
-                    {'name': 'Home team', 'class': 'textfield', 'type': 'with_dropmenu',
-                     'what_fields_child_fill': ['name'], 'visible': False,
-                     'data_table': 'team', 'data_key': 'team_home'},
+                    {'name': 'Home team', 'class': 'textfield', 'type': 'team', 'data_key': 'team_home', 'visible': False},
                     {'name': 'Year home team', 'class': 'textfield', 'type': 'age', 'data_key': 'team_home_year',
                      'size_hint_x': 0.35, 'visible': False},
 
                 ],
                 [
-                    {'name': 'Guest team', 'class': 'textfield', 'type': 'with_dropmenu',
-                     'what_fields_child_fill': ['name'], 'visible': False,
-                     'data_table': 'team', 'data_key': 'team_guest'},
+                    {'name': 'Guest team', 'class': 'textfield', 'type': 'team', 'data_key': 'team_guest', 'visible': False},
                     {'name': 'Year guest team', 'class': 'textfield', 'type': 'age', 'data_key': 'team_guest_year',
                      'size_hint_x': 0.35, 'visible': False}
                 ],
-                {'name': 'League', 'class': 'textfield', 'type': 'with_dropmenu', 'size_hint_x': 0.8,
-                 'what_fields_child_fill': ['name'], 'visible': False,
-                 'data_table': 'league', 'data_key': 'league_id'},
+                {'name': 'League', 'class': 'textfield', 'type': 'league', 'size_hint_x': 0.8, 'visible': False},
             ],
             [
                 {'class': 'expansionpanel', 'panel_text': 'Referee'},
-                {'name': 'First referee', 'class': 'textfield', 'type': 'with_dropmenu',
-                 'what_fields_child_fill': ['second_name', 'first_name', 'third_name'], 'visible': False,
-                 'data_table': 'referee', 'data_key': 'referee_first'},
-                {'name': 'Second referee', 'class': 'textfield', 'type': 'with_dropmenu',
-                 'what_fields_child_fill': ['second_name', 'first_name', 'third_name'], 'visible': False,
-                 'data_table': 'referee', 'data_key': 'referee_second'},
-                {'name': 'Reserve referee', 'class': 'textfield', 'type': 'with_dropmenu',
-                 'what_fields_child_fill': ['second_name', 'first_name', 'third_name'], 'visible': False,
-                 'data_table': 'referee', 'data_key': 'referee_reserve'}
+                {'name': 'First referee', 'class': 'textfield', 'type': 'referee', 'visible': False, 'data_key': 'referee_first'},
+                {'name': 'Second referee', 'class': 'textfield', 'type': 'referee', 'visible': False, 'data_key': 'referee_second'},
+                {'name': 'Reserve referee', 'class': 'textfield', 'type': 'referee', 'visible': False, 'data_key': 'referee_reserve'}
             ],
             [
                 {'class': 'boxlayout', 'orientation': 'horizontal', 'spacing': 10},
@@ -670,8 +651,7 @@ class AddRefereeContent(AddDialogContent):
             {'name': 'Fist name', 'class': 'textfield', 'data_key': 'first_name', 'add_text_in_parent': True},
             {'name': 'Third name', 'class': 'textfield', 'data_key': 'third_name'},
             {'name': 'Phone', 'class': 'textfield', 'type': 'phone', 'data_key': 'phone'},
-            {'name': 'Category', 'class': 'textfield', 'type': 'with_dropmenu', 'what_fields_child_fill': ['name'],
-             'data_table': 'category', 'data_key': 'category_id'}
+            {'name': 'Category', 'class': 'textfield', 'type': 'category'}
         ]
 
         super(AddRefereeContent, self).__init__(**kwargs)
@@ -682,8 +662,7 @@ class AddStadiumContent(AddDialogContent):
         self.data_table = "stadium"
         self.items = [
             {'name': 'Name', 'class': 'textfield', 'data_key': 'name', 'notnull': True, 'add_text_in_parent': True},
-            {'name': 'City', 'class': 'textfield', 'type': 'with_dropmenu', 'what_fields_child_fill': ['name'],
-             'data_table': 'city', 'data_key': 'city_id', 'notnull': True},
+            {'name': 'City', 'class': 'textfield', 'type': 'city', 'notnull': True},
             {'name': 'Address', 'class': 'textfield', 'data_key': 'address'},
         ]
 
@@ -729,7 +708,11 @@ class AddCityContent(AddDialogContent):
 class ExpansionPanel(MDExpansionPanel):
     def __init__(self, parent, **kwargs):
         self.parent_ = parent
+        self.name_ = kwargs['panel_cls'].text
         super(ExpansionPanel, self).__init__(**kwargs)
+
+    def __repr__(self):
+        return f"{__class__.__name__} of {self.name_!r}"
 
     @property
     def content_columns(self):
@@ -759,28 +742,66 @@ class ExpansionGridLayout(MDGridLayout):
     """Класс создан для разделения отдельного GridLayout и в составе ExpansionPanel."""
 
 
+class DropMenu(MDDropdownMenu):
+    def __init__(self, parent_):
+        self.width_mult = dp(4)
+        self.max_height = dp(250)
+        self.name_ = parent_.name_
+
+        super(DropMenu, self).__init__()
+
+    def __repr__(self):
+        return f"{__class__.__name__} of {self.name_!r}"
+
+    def set_items(self, text_list, list_items: list, added_item=None):
+        """Добавляет items в DropMenu."""
+        if list_items:
+            self.items = [{"text": f"{item}",
+                           "viewclass": "OneLineListItem",
+                           "on_release": lambda x=f"{item}": text_list.add_item_in_text_input(x),
+                           } for item in list_items]
+        else:
+            self.items = [{"text": f'Add "{added_item}" in base',
+                           "viewclass": "OneLineListItem",
+                           "on_release": lambda: text_list.drop_menu_add_data()}]
+
+    def update(self):
+        self.set_menu_properties()
+        if not self.parent:
+            self.open()
+
+
 class TextField(MDTextField):
-    def __init__(self, **kwargs):
-        self.parent_dialog = kwargs.pop('parent_', None)
+    def __init__(self, name, **kwargs):
+        self.parent_ = kwargs.pop('parent_', None)
         text = kwargs.pop('text', '')
-        self.size_hint_x = kwargs.pop('size_hint_x', 1)
         self.visible = kwargs.pop("visible", True)
 
         super(TextField, self).__init__()
 
+        self.hint_text = name
+        self.size_hint_x = kwargs.pop('size_hint_x', 1)
+
         self.set_text(self, text)
 
-        self.name = self.hint_text = kwargs.pop('name', '').capitalize()
         self.required = kwargs.pop('notnull', False)
         self.helper_text_mode = "on_error"
 
-        self.data_key = kwargs.pop('data_key', '')
-        self.data_table = kwargs.pop('data_table', '')
-        self.what_fields_child_fill = kwargs.pop('what_fields_child_fill', [])
         self.add_text_in_parent = kwargs.pop('add_text_in_parent', False)
 
         self.have_drop_menu = False
-        self.change_focus = False
+
+        self.check_pattern = "^.*$"
+
+    def __repr__(self):
+        return f"{__class__.__name__} of {self.hint_text!r}"
+
+    def check(self):
+        """Проверяет введеный текст."""
+        if not re.match(self.check_pattern, self.text):
+            self.text = ""
+            return False
+        return True
 
     def on_focus_(self):
         pass
@@ -791,184 +812,10 @@ class TextField(MDTextField):
     def on_cursor_(self):
         pass
 
-    def check_valid_text(self):
-        """Проверяет введеный текст."""
-
     def on_text_validate(self):
         """После ввода текста устанавливает фокус на следующем поле ввода."""
         super(TextField, self).on_text_validate()
-        self.parent_dialog.on_tf_text_validate(self)
-
-
-class TFWithoutDrop(TextField):
-    pass
-
-
-class PhoneTF(TFWithoutDrop):
-    def __init__(self, **kwargs):
-        super(PhoneTF, self).__init__(**kwargs)
-
-        self.helper_text = "X(XXX)XXX-XX-XX"
-        self.helper_text_mode = "persistent"
-
-    def insert_text(self, substring, from_undo=False):
-        """Фильтрует ввод текста под формат номера телефона."""
-        cursor = self.cursor_col
-
-        substring = re.sub('[^0-9+]', '', substring)
-
-        if substring == "+":
-            cursor = self.cursor_col - 1
-        elif self.text.startswith("+"):
-            cursor -= 1
-
-        if cursor == 0:
-            substring += "("
-        elif cursor == 4:
-            substring += ")"
-        elif cursor == 8 or cursor == 11:
-            substring += "-"
-        elif cursor > 14:
-            substring = ''
-        return super(PhoneTF, self).insert_text(substring, from_undo=from_undo)
-
-    def do_backspace(self, from_undo=False, mode='bkspc'):
-        cursor = self.cursor_col
-
-        if self.text.startswith("+"):
-            cursor -= 1
-
-        doble_bkspc = False
-        if cursor in [3, 7, 11, 14]:
-            doble_bkspc = True
-
-        if doble_bkspc:
-            super(PhoneTF, self).do_backspace(from_undo=from_undo, mode='bkspc')
-        super(PhoneTF, self).do_backspace(from_undo=from_undo, mode='bkspc')
-
-    def check_valid_text(self) -> bool:
-        pat = "^(\+7|8)\([0-9]{3}\)[0-9]{3}(-[0-9]{2}){2}$"
-
-        if not re.match(pat, self.text):
-            self.text = ""
-            return False
-
-        return True
-
-    def on_text_validate(self):
-        self.check_valid_text()
-        super(PhoneTF, self).on_text_validate()
-
-
-class DateTF(TFWithoutDrop):
-    def __init__(self, **kwargs):
-        super(DateTF, self).__init__(**kwargs)
-
-        self.helper_text = "DD.MM.YYYY"
-        self.helper_text_mode = "persistent"
-
-    def insert_text(self, substring, from_undo=False):
-        cursor = self.cursor_col
-        substring = re.sub('[^0-9]', '', substring)
-        if cursor in [1, 4]:
-            substring += "."
-        elif cursor > 9:
-            substring = ""
-        return super(DateTF, self).insert_text(substring, from_undo=from_undo)
-
-    def do_backspace(self, from_undo=False, mode='bkspc'):
-        cursor = self.cursor_col
-        doble_bkspc = False
-        if cursor in [3, 6, 11]:
-            # стираем символ два раза, чтобы удалить разделяющий символ .
-            doble_bkspc = True
-
-        if doble_bkspc:
-            super(DateTF, self).do_backspace(from_undo=from_undo, mode='bkspc')
-        super(DateTF, self).do_backspace(from_undo=from_undo, mode='bkspc')
-
-    def check_valid_text(self):
-        pat = "^(0?[1-9]|[12][0-9]|3[01]).(0?[0-9]|1[012]).(19|20)?[0-9]{2}$"
-
-        if not re.match(pat, self.text):
-            self.text = ""
-            return False
-        return True
-
-    def on_text_validate(self):
-        self.check_valid_text()
-        super(DateTF, self).on_text_validate()
-
-
-class TimeTF(TFWithoutDrop):
-    def __init__(self, **kwargs):
-        super(TimeTF, self).__init__(**kwargs)
-
-        self.helper_text = "HH:MM"
-        self.helper_text_mode = "persistent"
-
-    def insert_text(self, substring, from_undo=False):
-        cursor = self.cursor_col
-        substring = re.sub('[^0-9]', '', substring)
-        if cursor == 1:
-            substring += ":"
-        elif cursor > 4:
-            substring = ''
-        return super(TimeTF, self).insert_text(substring, from_undo=from_undo)
-
-    def do_backspace(self, from_undo=False, mode='bkspc'):
-        cursor = self.cursor_col
-        doble_bkspc = False
-        if cursor == 3:
-            # стираем символ два раза, чтобы разделяющий символ :
-            doble_bkspc = True
-
-        if doble_bkspc:
-            super(TimeTF, self).do_backspace(from_undo=from_undo, mode='bkspc')
-        super(TimeTF, self).do_backspace(from_undo=from_undo, mode='bkspc')
-
-    def check_valid_text(self):
-        pat = "^([01][1-9]|2[0-4]):[0-6][0-9]$"
-
-        if not re.match(pat, self.text):
-            self.text = ""
-            return False
-        return True
-
-    def on_text_validate(self):
-        self.check_valid_text()
-        super(TimeTF, self).on_text_validate()
-
-
-class YearTF(TFWithoutDrop):
-    def insert_text(self, substring, from_undo=False):
-        cursor = self.cursor_col
-        substring = re.sub('[^0-9]', '', substring)
-        if cursor > 3:
-            substring = ''
-        return super(YearTF, self).insert_text(substring, from_undo=from_undo)
-
-    def on_text_validate(self):
-        pat = "^(19|20)[0-9]{2}$"
-
-        if not re.match(pat, self.text):
-            self.text = ""
-
-        super(YearTF, self).on_text_validate()
-
-
-class PaymentTF(TFWithoutDrop):
-    def insert_text(self, substring, from_undo=False):
-        substring = re.sub('[^0-9]', '', substring)
-        return super(PaymentTF, self).insert_text(substring, from_undo=from_undo)
-
-    def on_text_validate(self):
-        pat = "^[^0][0-9]*$"
-
-        if not re.match(pat, self.text):
-            self.text = ""
-
-        super(PaymentTF, self).on_text_validate()
+        self.parent_.on_tf_text_validate(self)
 
 
 class TFWithDrop(TextField):
@@ -976,7 +823,7 @@ class TFWithDrop(TextField):
         super(TFWithDrop, self).__init__(**kwargs)
         self.have_drop_menu = True
 
-        self.drop_menu = DropMenu()
+        self.drop_menu = DropMenu(parent_=self)
 
     def add_item_in_text_input(self, text_item):
         self.text = text_item
@@ -1064,28 +911,248 @@ class TFWithDrop(TextField):
         filled_fields = self._make_dict_filled_field_in_children()
         self.drop_menu.dismiss()
 
-        self.add_data_dialog = AddDialogWindow(type_=self.data_table, filled_field=filled_fields, caller_=self)
+        self.add_data_dialog = AddDialogWindow(type_=self.name_, filled_field=filled_fields, caller_=self)
         self.add_data_dialog.open()
+
+
+class TFWithoutDrop(TextField):
+    def __init__(self, **kwargs):
+        super(TFWithoutDrop, self).__init__(**kwargs)
+        self.name_ = self.data_key = kwargs.get("data_key")
+
+
+class PhoneTF(TFWithoutDrop):
+    def __init__(self, **kwargs):
+        super(PhoneTF, self).__init__(**kwargs)
+
+        self.check_pattern = "^(\+7|8)\([0-9]{3}\)[0-9]{3}(-[0-9]{2}){2}$"
+        self.helper_text = "X(XXX)XXX-XX-XX"
+        self.helper_text_mode = "persistent"
+
+    def insert_text(self, substring, from_undo=False):
+        """Фильтрует ввод текста под формат номера телефона."""
+        cursor = self.cursor_col
+
+        substring = re.sub('[^0-9+]', '', substring)
+
+        if substring == "+":
+            cursor = self.cursor_col - 1
+        elif self.text.startswith("+"):
+            cursor -= 1
+
+        if cursor == 0:
+            substring += "("
+        elif cursor == 4:
+            substring += ")"
+        elif cursor == 8 or cursor == 11:
+            substring += "-"
+        elif cursor > 14:
+            substring = ''
+        return super(PhoneTF, self).insert_text(substring, from_undo=from_undo)
+
+    def do_backspace(self, from_undo=False, mode='bkspc'):
+        cursor = self.cursor_col
+
+        if self.text.startswith("+"):
+            cursor -= 1
+
+        doble_bkspc = False
+        if cursor in [3, 7, 11, 14]:
+            doble_bkspc = True
+
+        if doble_bkspc:
+            super(PhoneTF, self).do_backspace(from_undo=from_undo, mode='bkspc')
+        super(PhoneTF, self).do_backspace(from_undo=from_undo, mode='bkspc')
+
+    def on_text_validate(self):
+        self.check()
+        super(PhoneTF, self).on_text_validate()
+
+
+class DateTF(TFWithoutDrop):
+    def __init__(self, **kwargs):
+        super(DateTF, self).__init__(**kwargs)
+
+        self.name_ = self.data_key = 'date'
+        self.check_pattern = "^(0?[1-9]|[12][0-9]|3[01]).(0?[0-9]|1[012]).(19|20)?[0-9]{2}$"
+        self.helper_text = "DD.MM.YYYY"
+        self.helper_text_mode = "persistent"
+
+    def insert_text(self, substring, from_undo=False):
+        cursor = self.cursor_col
+        substring = re.sub('[^0-9]', '', substring)
+        if cursor in [1, 4]:
+            substring += "."
+        elif cursor > 9:
+            substring = ""
+        return super(DateTF, self).insert_text(substring, from_undo=from_undo)
+
+    def do_backspace(self, from_undo=False, mode='bkspc'):
+        cursor = self.cursor_col
+        doble_bkspc = False
+        if cursor in [3, 6, 11]:
+            # стираем символ два раза, чтобы удалить разделяющий символ .
+            doble_bkspc = True
+
+        if doble_bkspc:
+            super(DateTF, self).do_backspace(from_undo=from_undo, mode='bkspc')
+        super(DateTF, self).do_backspace(from_undo=from_undo, mode='bkspc')
+
+    def on_text_validate(self):
+        self.check()
+        super(DateTF, self).on_text_validate()
+
+
+class TimeTF(TFWithoutDrop):
+    def __init__(self, **kwargs):
+        super(TimeTF, self).__init__(**kwargs)
+
+        self.name_ = self.data_key = 'time'
+        self.check_pattern = "^([01][1-9]|2[0-4]):[0-6][0-9]$"
+        self.helper_text = "HH:MM"
+        self.helper_text_mode = "persistent"
+
+    def insert_text(self, substring, from_undo=False):
+        cursor = self.cursor_col
+        substring = re.sub('[^0-9]', '', substring)
+        if cursor == 1:
+            substring += ":"
+        elif cursor > 4:
+            substring = ''
+        return super(TimeTF, self).insert_text(substring, from_undo=from_undo)
+
+    def do_backspace(self, from_undo=False, mode='bkspc'):
+        cursor = self.cursor_col
+        doble_bkspc = False
+        if cursor == 3:
+            # стираем символ два раза, чтобы разделяющий символ :
+            doble_bkspc = True
+
+        if doble_bkspc:
+            super(TimeTF, self).do_backspace(from_undo=from_undo, mode='bkspc')
+        super(TimeTF, self).do_backspace(from_undo=from_undo, mode='bkspc')
+
+    def on_text_validate(self):
+        self.check()
+        super(TimeTF, self).on_text_validate()
+
+
+class YearTF(TFWithoutDrop):
+    def __init__(self, **kwargs):
+        super(YearTF, self).__init__(**kwargs)
+
+        self.name_ = self.data_key = kwargs.pop("data_key")
+        self.check_pattern = "^(19|20)[0-9]{2}$"
+
+    def insert_text(self, substring, from_undo=False):
+        cursor = self.cursor_col
+        substring = re.sub('[^0-9]', '', substring)
+        if cursor > 3:
+            substring = ''
+        return super(YearTF, self).insert_text(substring, from_undo=from_undo)
+
+    def on_text_validate(self):
+        self.check()
+        super(YearTF, self).on_text_validate()
+
+
+class StadiumTF(TFWithDrop):
+    def __init__(self, **kwargs):
+        self.name_ = self.data_key = "stadium"
+        super(StadiumTF, self).__init__(**kwargs)
+
+        self.data_table = "Stadium"
+        self.what_fields_child_fill = ['name']
+
+
+class RefereeTF(TFWithDrop):
+    def __init__(self, **kwargs):
+        self.name_ = self.data_key = kwargs.pop('data_key')
+        super(RefereeTF, self).__init__(**kwargs)
+
+        self.data_table = "Referee"
+        self.what_fields_child_fill = ['second_name', 'first_name', 'third_name']
+
+
+class TeamTF(TFWithDrop):
+    def __init__(self, **kwargs):
+        self.name_ = self.data_key = kwargs.pop('data_key')
+        super(TeamTF, self).__init__(**kwargs)
+
+        self.data_table = "Team"
+        self.what_fields_child_fill = ['name']
+
+
+class LeagueTF(TFWithDrop):
+    def __init__(self, **kwargs):
+        self.name_ = "league"
+        super(LeagueTF, self).__init__(**kwargs)
+
+        self.data_key = "league_id"
+        self.data_table = "League"
+        self.what_fields_child_fill = ['name']
+
+
+class CategoryTF(TFWithDrop):
+    def __init__(self, **kwargs):
+        self.name_ = "category"
+        super(CategoryTF, self).__init__(**kwargs)
+
+        self.data_key = "category_id"
+        self.data_table = "Category"
+        self.what_fields_child_fill = ['name']
+
+
+class CityTF(TFWithDrop):
+    def __init__(self, **kwargs):
+        self.name_ = "city"
+        super(CityTF, self).__init__(**kwargs)
+
+        self.data_key = "city_id"
+        self.data_table = "City"
+        self.what_fields_child_fill = ['name']
+
+
+class PaymentTF(TFWithoutDrop):
+    def __init__(self, **kwargs):
+        super(PaymentTF, self).__init__(**kwargs)
+
+        self.name_ = self.data_key = 'payment'
+        self.check_pattern = "^[^0][0-9]*$"
+
+    def insert_text(self, substring, from_undo=False):
+        substring = re.sub('[^0-9]', '', substring)
+        return super(PaymentTF, self).insert_text(substring, from_undo=from_undo)
+
+    def on_text_validate(self):
+        self.check()
+        super(PaymentTF, self).on_text_validate()
 
 
 class GameCheck(CheckBox):
     def __init__(self, **kwargs):
+        self.name_ = self.data_key = kwargs.pop("data_key")
         self.size_hint_x = kwargs.pop('size_hint_x', 1)
         self.data_key = kwargs.pop('data_key', '')
         # self.color = app.theme_cls.primary_color
 
         super(GameCheck, self).__init__()
 
+    def __repr__(self):
+        return f"{__class__.__name__} of {self.name_!r}"
+
+    def check(self):
+        pass
+
 
 class LabelWithChange(BoxLayout):
     def __init__(self, game=None, **kwargs):
         self.orientation = "horizontal"
         self.padding = 10
-        super(LabelWithChange, self).__init__()
-
         self.game = game
-        self.parent_ = kwargs.pop("parent_")
-        self.text = kwargs.pop("text", '')
+        self.name_ = kwargs.pop("name", '')
+
+        super(LabelWithChange, self).__init__()
 
         self.label_value = ObjectProperty()
         self.label = ObjectProperty()
@@ -1095,9 +1162,12 @@ class LabelWithChange(BoxLayout):
         self.widgets_mode_view = ObjectProperty()
         self.widgets_mode_change = ObjectProperty()
 
+    def __repr__(self):
+        return f"{__class__.__name__} of {self.name_!r}"
+
     def show(self):
         self.label_value = MDLabel(text=self.value)
-        self.label = MDLabel(text=f"{self.text}:", size_hint_x=0.3)
+        self.label = MDLabel(text=f"{self.name_}:", size_hint_x=0.3)
         self.btn_change = MDFlatButton(text="CHANGE", on_release=self.click_change,
                                        theme_text_color="Custom", text_color=app.theme_cls.primary_color)
         self.btn_add = MDRaisedButton(text="ADD", on_release=self.click_add)
@@ -1134,7 +1204,7 @@ class LabelWithChange(BoxLayout):
         self.change_mode("change")
 
     def click_add(self, event=None):
-        if not self.text_field.check_valid_text():
+        if not self.text_field.check():
             self.text_field.text = 'incorrect'
         else:
             DB.update("Games", {self.data_key: self.text_field.text}, {"id": self.game.id_in_db})
@@ -1149,7 +1219,7 @@ class LabelWithChange(BoxLayout):
 class DataLWC(LabelWithChange):
     def __init__(self, **kwargs):
         super(DataLWC, self).__init__(**kwargs)
-        self.text_field = DateTF(parent_=self.parent_)
+        self.text_field = DateTF(**kwargs)
         self.data_key = "date"
         self.value = self.game.date.strftime("%d.%m.%Y")
         self.show()
@@ -1158,7 +1228,7 @@ class DataLWC(LabelWithChange):
 class TimeLWC(LabelWithChange):
     def __init__(self, **kwargs):
         super(TimeLWC, self).__init__(**kwargs)
-        self.text_field = TimeTF(parent_=self.parent_)
+        self.text_field = TimeTF(**kwargs)
         self.data_key = "time"
         self.value = self.game.date.strftime("%H:%M")
         self.show()
