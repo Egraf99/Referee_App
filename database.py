@@ -64,7 +64,7 @@ class ConnDB:
     def games(self) -> List[dict]:
         """Возвращает все данные по всем играм в виде списка словарей."""
 
-        column_names = ["id",
+        column_names = ("id",
                         "league_id",
                         "stadium_id",
                         "team_home",
@@ -82,7 +82,7 @@ class ConnDB:
                         "time",
                         "team_home_year",
                         "team_guest_year",
-                        ]
+                        )
 
         sql = f'''SELECT * FROM Games ORDER BY year, month, day ASC, time DESC'''
 
@@ -112,8 +112,9 @@ class ConnDB:
 
     def insert(self, table: str, data: dict) -> None:
         """Добавляет в БД заданные данные."""
-
-        self._convert_data(data)
+        # print(data)
+        for k, v in data.items():
+            data[k] = int(v) if type(v) == str and v.isdigit() else v
 
         column = ','.join(d for d in data.keys())
         count_values = ','.join('?' * len(data.values()))
@@ -121,12 +122,14 @@ class ConnDB:
 
         sql = f'''INSERT INTO {table}({column}) VALUES ({count_values}); '''
 
+        print(sql, values)
         self._request(sql, values)
 
     def update(self, table: str, data: dict, conditions: dict):
         """Обновляет БД."""
 
-        self._convert_data(data)
+        for k, v in data.items():
+            data[k] = int(v) if type(v) == str and v.isdigit() else v
 
         column = ','.join(f'{d}=?' for d in data.keys())
         values = [d for d in data.values()]
@@ -161,34 +164,31 @@ class ConnDB:
 
         return " AND ".join(name_list), values
 
-    @staticmethod
-    def _convert_data(data: dict) -> None:
-        """Преаобразует специальные поля (дата, время, телефон) в формат значений БД."""
-        if "date" in data.keys():
-            date = data.pop("date").split(" ")
-            day, month, year = map(lambda d: int(d), date[0].split("."))
-
-            _data = {'day': day, 'month': month, 'year': year}
-            for i in _data:
-                data[i] = _data[i]
-
-        if "time" in data.keys():
-            time = data.pop("time")
-            time = int(time.replace(":", ""))
-            data["time"] = time
-
-        if "phone" in data.keys():
-            # в телефоне оставляем только числа
-            phone_ = ''
-            phone = data.pop("phone")
-            for symbol in phone:
-                if symbol.isdigit():
-                    phone_ += symbol
-
-            data['phone'] = int(phone_)
-
-        for k, v in data.items():
-            data[k] = int(v) if type(v) == str and v.isdigit() else v
+    # @staticmethod
+    # def _convert_data(data: dict) -> None:
+    #     """Преаобразует специальные поля (дата, время, телефон) в формат значений БД."""
+    #     if "date" in data.keys():
+    #         date = data.pop("date").split(" ")
+    #         day, month, year = map(lambda d: int(d), date[0].split("."))
+    #
+    #         _data = {'day': day, 'month': month, 'year': year}
+    #         for i in _data:
+    #             data[i] = _data[i]
+    #
+    #     if "time" in data.keys():
+    #         time = data.pop("time")
+    #         time = int(time.replace(":", ""))
+    #         data["time"] = time
+    #
+    #     if "phone" in data.keys():
+    #         # в телефоне оставляем только числа
+    #         phone_ = ''
+    #         phone = data.pop("phone")
+    #         for symbol in phone:
+    #             if symbol.isdigit():
+    #                 phone_ += symbol
+    #
+    #         data['phone'] = int(phone_)
 
     def _select_request(self, sql: str, values: Optional[list] = None, one_value: bool = False) -> list:
         self.cursor = sqlite3.connect('referee.db').cursor()
@@ -218,9 +218,10 @@ class Game:
     # dict of status icon, color, name
     status_icn = {"not_passed": ("calendar-alert", colors["Yellow"]["800"], "Не проведена"),
                   "passed": ("calendar-check", colors["LightGreen"]["400"], "Проведена"),
-                  "pay_done": ("calendar-check", colors["Green"]["700"], "Оплачено")}
+                  "pay_done": ("calendar-check", colors["Green"]["700"], "Оплачено"),
+                  }
     # list future attribute
-    attribute = ["id_in_db",
+    attribute = ("id_in_db",
                  "league", "date", "time", "stadium",
                  "team_home",
                  "team_guest",
@@ -230,7 +231,8 @@ class Game:
                  "referee_reserve", "game_passed",
                  "pay_done",
                  "payment",
-                 "status"]
+                 "status",
+                 )
 
     def __init__(self, **kwargs):
         self.id_in_db = kwargs.pop("id", None)
