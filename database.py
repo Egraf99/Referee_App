@@ -312,7 +312,7 @@ class Referee:
 class League:
     def __init__(self, id_: int):
         self.id = id_
-        self.name = self._get_name_from_db
+        self.name = self._get_name_from_db()
 
     def _get_name_from_db(self):
         return take_one_data("name", "League", {"id": self.id})
@@ -331,7 +331,7 @@ class Stadium:
 class Team:
     def __init__(self, id_: int):
         self.id = id_
-        self.name = self._get_name_from_db
+        self.name = self._get_name_from_db()
 
     def _get_name_from_db(self):
         return take_one_data("name", "Team", {"id": self.id})
@@ -340,7 +340,7 @@ class Team:
 class Category:
     def __init__(self, id_: int):
         self.id = id_
-        self.name = self._get_name_from_db
+        self.name = self._get_name_from_db()
 
     def _get_name_from_db(self):
         return take_one_data("name", "Category", {"id": self.id})
@@ -349,7 +349,7 @@ class Category:
 class City:
     def __init__(self, id_: int):
         self.id = id_
-        self.name = self._get_name_from_db
+        self.name = self._get_name_from_db()
 
     def _get_name_from_db(self):
         return take_one_data("name", "City", {"id": self.id})

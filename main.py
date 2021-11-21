@@ -97,9 +97,15 @@ class GamesTable(MDDataTable, TouchBehavior):
                           "stadium": ('Стадион',),
                           "team_home": ('Хозяева',),
                           "team_guest": ('Гости',),
-                          "status": ('Статус', dp(30))}
+                          "referee_chief": ('Судья',),
+                          "status": ('Статус', dp(30)),
+                          }
 
-        self.showed_data = ["date", "time", "stadium", "league", "status", "referee_chief", "team_home", "team_guest"]
+        self.showed_data = ["date",
+                            "time",
+                            "stadium",
+                            "status",
+                            ]
 
         # проверка, если в будущем будет несколько таблиц с заданными показываемыми значениями
         # значения showed_data должны состоять из ключей data_dict
@@ -397,6 +403,14 @@ class DialogContent(RecycleView):
             self._add_widget(DataLWC(game=self.game, **kwargs), box)
         elif type_ == "time":
             self._add_widget(TimeLWC(game=self.game, **kwargs), box)
+        elif type_ == "stadium":
+            self._add_widget(StadiumLWC(game=self.game, **kwargs), box)
+        elif type_ == "team":
+            self._add_widget(TeamLWC(game=self.game, **kwargs), box)
+        elif type_ == "referee":
+            self._add_widget(RefereeLWC(game=self.game, **kwargs), box)
+        else:
+            raise TypeError(f"Incorrect type: {type_}")
 
     def _add_widget(self, widget, box: Layout):
         box.add_widget(widget)
@@ -405,7 +419,7 @@ class DialogContent(RecycleView):
     def _get_height(self):
         """Устанавливает высоту Content в зависимости от количества items."""
         height = len(self.items) * 70
-        height = 1000 if height > 1000 else height
+        height = 400 if height > 400 else height
         return dp(height)
 
     def _get_box_height(self):
@@ -557,10 +571,19 @@ class AddDialogContent(DialogContent):
 class InfoGameContent(InfoDialogContent):
     def __init__(self, **kwargs):
         self.game = kwargs.pop("data_cls", None)
-        self.items = [
+        self.items = (
             {'name': 'Date', 'class': 'label_with_change', 'type': 'date'},
             {'name': 'Time', 'class': 'label_with_change', 'type': 'time'},
-        ]
+            {'name': 'Stadium', 'class': 'label_with_change', 'type': 'stadium'},
+            {'name': 'Team home', 'class': 'label_with_change', 'type': 'team', 'data_key': 'team_home'},
+            {'name': 'Team guest', 'class': 'label_with_change', 'type': 'team', 'data_key': 'team_guest'},
+            {'name': 'Referee chief', 'class': 'label_with_change', 'type': 'referee', 'data_key': 'referee_chief'},
+            {'name': 'Referee first', 'class': 'label_with_change', 'type': 'referee', 'data_key': 'referee_first'},
+            {'name': 'Referee second', 'class': 'label_with_change', 'type': 'referee',
+             'data_key': 'referee_second'},
+            {'name': 'Referee reserve', 'class': 'label_with_change', 'type': 'referee',
+             'data_key': 'referee_reserve'},
+        )
 
         super(InfoGameContent, self).__init__(**kwargs)
 
@@ -1092,9 +1115,10 @@ class YearTF(TFWithoutDrop):
 
 class StadiumTF(TFWithDrop):
     def __init__(self, **kwargs):
-        self.name_ = self.data_key = "stadium"
+        self.name_ = "stadium"
         super(StadiumTF, self).__init__(**kwargs)
 
+        self.data_key = "stadium_id"
         self.data_table = "Stadium"
         self.what_fields_child_fill = ['name']
 
@@ -1193,6 +1217,7 @@ class LabelWithChange(BoxLayout):
 
         self.label_value = ObjectProperty()
         self.label = ObjectProperty()
+        self.text_field = ObjectProperty()
         self.btn_change = ObjectProperty()
         self.btn_add = ObjectProperty()
         self.btn_cancel = ObjectProperty()
@@ -1203,7 +1228,9 @@ class LabelWithChange(BoxLayout):
         return f"{__class__.__name__} of {self.name_!r}"
 
     def show(self):
-        self.label_value = MDLabel(text=self.value)
+        self.text_field.size_hint_x = .5
+        self.text_field.pos_hint = {"x": .3, "y": -0.18}
+        self.label_value = MDLabel(text=self.value, size_hint_x=.7)
         self.label = MDLabel(text=f"{self.name_}:", size_hint_x=0.3)
         self.btn_change = MDFlatButton(text="CHANGE", on_release=self.click_change,
                                        theme_text_color="Custom", text_color=app.theme_cls.primary_color)
@@ -1227,6 +1254,7 @@ class LabelWithChange(BoxLayout):
     def change_mode(self, mode: str):
         assert mode in ["change", "view"]
         self.clear_widgets()
+
         if mode == "change":
             widgets = self.widgets_mode_change
         elif mode == "view":
@@ -1257,7 +1285,6 @@ class DataLWC(LabelWithChange):
     def __init__(self, **kwargs):
         super(DataLWC, self).__init__(**kwargs)
         self.text_field = DateTF(**kwargs)
-        self.data_key = "date"
         self.value = self.game.date.strftime("%d.%m.%Y")
         self.show()
 
@@ -1266,8 +1293,41 @@ class TimeLWC(LabelWithChange):
     def __init__(self, **kwargs):
         super(TimeLWC, self).__init__(**kwargs)
         self.text_field = TimeTF(notnull=True, **kwargs)
-        self.data_key = "time"
         self.value = self.game.date.strftime("%H:%M")
+        self.show()
+
+
+class StadiumLWC(LabelWithChange):
+    def __init__(self, **kwargs):
+        super(StadiumLWC, self).__init__(**kwargs)
+        self.text_field = StadiumTF(notnull=True, **kwargs)
+        self.value = self.game.stadium.name
+        self.show()
+
+
+class LeagueLWC(LabelWithChange):
+    def __init__(self, **kwargs):
+        super(LeagueLWC, self).__init__(**kwargs)
+        self.text_field = LeagueTF(notnull=True, **kwargs)
+        self.value = self.game.league.name if self.game.league else '-'
+        self.show()
+
+
+class TeamLWC(LabelWithChange):
+    def __init__(self, **kwargs):
+        super(TeamLWC, self).__init__(**kwargs)
+        self.text_field = TeamTF(notnull=True, **kwargs)
+        team = getattr(self.game, kwargs.pop('data_key'))
+        self.value = team.name if team else ''
+        self.show()
+
+
+class RefereeLWC(LabelWithChange):
+    def __init__(self, **kwargs):
+        super(RefereeLWC, self).__init__(**kwargs)
+        self.text_field = RefereeTF(notnull=True, **kwargs)
+        referee = getattr(self.game, kwargs.pop('data_key'))
+        self.value = referee.second_name if referee else ''
         self.show()
 
 
