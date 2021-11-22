@@ -342,7 +342,7 @@ class DialogContent(RecycleView):
                                                   cols=item.pop("cols", 1),
                                                   adaptive_height=True)
                     panel = ExpansionPanel(self,
-                                           panel_cls=MDExpansionPanelOneLine(text=item.pop("panel_text", "")),
+                                           panel_cls=MDExpansionPanelOneLine(text=item.pop("name", "")),
                                            content=new_box)
                     box.add_widget(panel)
                     box = new_box
@@ -425,7 +425,7 @@ class DialogContent(RecycleView):
     def _get_box_height(self):
         """Устанавливает высоту BoxLayout в зависимости от количества items и их заданной высоты."""
         # высота item, если она не указана
-        self.default_item_height = 62
+        self.default_item_height = getattr(self, "default_item_height", 62)
         self.default_box_height = self._get_items_height(len(self.items))
 
         return dp(self.default_box_height)
@@ -436,6 +436,7 @@ class DialogContent(RecycleView):
 
 class InfoDialogContent(DialogContent):
     def __init__(self, **kwargs):
+        self.default_item_height = 64
         super(InfoDialogContent, self).__init__()
 
     def on_tf_text_validate(self, caller):
@@ -483,7 +484,6 @@ class AddDialogContent(DialogContent):
                     not_fill_fields.append(child.hint_text)
 
             elif isinstance(child, GameCheck):
-                print(child, self._check_checkbox(child))
                 data.update(self._check_checkbox(child))
 
         if not_fill_fields:  # если есть незаполненные необходимые поля вызывает подсказку и возвращает неуспех
@@ -570,19 +570,19 @@ class AddDialogContent(DialogContent):
 
 class InfoGameContent(InfoDialogContent):
     def __init__(self, **kwargs):
-        self.game = kwargs.pop("data_cls", None)
+        self.game = kwargs["data_cls"]
         self.items = (
             {'name': 'Date', 'class': 'label_with_change', 'type': 'date'},
             {'name': 'Time', 'class': 'label_with_change', 'type': 'time'},
             {'name': 'Stadium', 'class': 'label_with_change', 'type': 'stadium'},
-            {'name': 'Team home', 'class': 'label_with_change', 'type': 'team', 'data_key': 'team_home'},
-            {'name': 'Team guest', 'class': 'label_with_change', 'type': 'team', 'data_key': 'team_guest'},
-            {'name': 'Referee chief', 'class': 'label_with_change', 'type': 'referee', 'data_key': 'referee_chief'},
-            {'name': 'Referee first', 'class': 'label_with_change', 'type': 'referee', 'data_key': 'referee_first'},
-            {'name': 'Referee second', 'class': 'label_with_change', 'type': 'referee',
+            {'name': 'R. chief', 'class': 'label_with_change', 'type': 'referee', 'data_key': 'referee_chief'},
+            {'name': 'R. first', 'class': 'label_with_change', 'type': 'referee', 'data_key': 'referee_first'},
+            {'name': 'R. second', 'class': 'label_with_change', 'type': 'referee',
              'data_key': 'referee_second'},
-            {'name': 'Referee reserve', 'class': 'label_with_change', 'type': 'referee',
+            {'name': 'R. reserve', 'class': 'label_with_change', 'type': 'referee',
              'data_key': 'referee_reserve'},
+            {'name': 'T. home', 'class': 'label_with_change', 'type': 'team', 'data_key': 'team_home'},
+            {'name': 'T. guest', 'class': 'label_with_change', 'type': 'team', 'data_key': 'team_guest'},
         )
 
         super(InfoGameContent, self).__init__(**kwargs)
@@ -601,7 +601,7 @@ class AddGameContent(AddDialogContent):
             {'name': 'Chief referee', 'class': 'textfield', 'type': 'referee', 'data_key': 'referee_chief',
              'notnull': True},
             (
-                {'class': 'expansionpanel', 'panel_text': 'Team', 'cols': 2},
+                {'class': 'expansionpanel', 'name': 'Team', 'cols': 2},
                 (
                     {'name': 'Home team', 'class': 'textfield', 'type': 'team', 'data_key': 'team_home'},
                     {'name': 'Year home team', 'class': 'textfield', 'type': 'age', 'data_key': 'team_home_year',
@@ -616,7 +616,7 @@ class AddGameContent(AddDialogContent):
                 {'name': 'League', 'class': 'textfield', 'type': 'league', 'size_hint_x': 0.8},
             ),
             (
-                {'class': 'expansionpanel', 'panel_text': 'Referee'},
+                {'class': 'expansionpanel', 'name': 'Referee'},
                 {'name': 'First referee', 'class': 'textfield', 'type': 'referee',
                  'data_key': 'referee_first'},
                 {'name': 'Second referee', 'class': 'textfield', 'type': 'referee',
@@ -1206,7 +1206,7 @@ class GameCheck(CheckBox):
         return {self.data_key: data}
 
 
-class LabelWithChange(BoxLayout):
+class LabelWithChange(BoxLayout, TouchBehavior):
     def __init__(self, game=None, **kwargs):
         self.orientation = "horizontal"
         self.padding = 10
@@ -1251,11 +1251,16 @@ class LabelWithChange(BoxLayout):
 
         self.change_mode("view")
 
+    def on_long_touch(self, touch, *args):
+        self.change_mode("change")
+
     def change_mode(self, mode: str):
         assert mode in ["change", "view"]
         self.clear_widgets()
 
         if mode == "change":
+            self.text_field.text = self.value
+            Clock.schedule_once(self._focus_textfield, 0.5)
             widgets = self.widgets_mode_change
         elif mode == "view":
             widgets = self.widgets_mode_view
@@ -1264,6 +1269,9 @@ class LabelWithChange(BoxLayout):
 
         for widget in widgets:
             self.add_widget(widget)
+
+    def _focus_textfield(self, dp=None):
+        self.text_field.focus = True
 
     def click_change(self, event=None):
         self.change_mode("change")
@@ -1284,7 +1292,7 @@ class LabelWithChange(BoxLayout):
 class DataLWC(LabelWithChange):
     def __init__(self, **kwargs):
         super(DataLWC, self).__init__(**kwargs)
-        self.text_field = DateTF(**kwargs)
+        self.text_field = DateTF(notnull=True, **kwargs)
         self.value = self.game.date.strftime("%d.%m.%Y")
         self.show()
 
