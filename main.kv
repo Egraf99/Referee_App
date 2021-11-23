@@ -51,14 +51,3 @@
     on_focus: if self.focus: root.on_focus_()
     on_cursor: root.on_cursor_()
 
-
-<DialogContent>:
-    size_hint_y: None
-    height: self._get_height()
-
-    MDBoxLayout:
-        id: box
-        spacing: "10dp"
-        orientation: "vertical"
-        size_hint_y: None
-        height: root._get_box_height()

@@ -24,7 +24,7 @@ from kivymd.uix.gridlayout import MDGridLayout
 from kivymd.uix.card import MDCard
 from kivymd.uix.datatables import MDDataTable
 from kivymd.uix.dialog import MDDialog
-from kivymd.uix.button import MDFlatButton, MDFloatingActionButton, MDRaisedButton, MDTextButton
+from kivymd.uix.button import MDFlatButton, MDFloatingActionButton, MDRaisedButton, MDTextButton, MDIconButton
 from kivymd.uix.textfield import MDTextField
 from kivymd.uix.label import MDLabel
 from kivymd.uix.list import OneLineAvatarIconListItem, OneLineIconListItem
@@ -283,19 +283,28 @@ class AddDialogWindow(DialogWindow):
 
 class DialogContent(RecycleView):
     def __init__(self):
+        self.size_hint_y = None
+        self.height = self._get_height()
         super(DialogContent, self).__init__()
 
+        self.box = BoxLayout(spacing=dp(10),
+                             orientation='vertical',
+                             size_hint_y=None,
+                             height=self._get_box_height(),
+                             )
+        self.add_widget(self.box)
+
         self.children_ = []
-        self._add_items_in_box(self.items, self.ids.box)
+        self._add_items_in_box(self.items, self.box)
 
     def increase_box_height(self, count_items: int):
-        self.ids.box.height += self._get_items_height(count_items)
+        self.box.height += self._get_items_height(count_items)
 
     def reduce_box_height(self, count_items: int):
-        self.ids.box.height -= self._get_items_height(count_items)
+        self.box.height -= self._get_items_height(count_items)
 
     def set_default_box_height(self):
-        self.ids.box.height = self.default_box_height
+        self.box.height = self.default_box_height
 
     @abstractmethod
     def on_tf_text_validate(self, caller):
@@ -1234,9 +1243,10 @@ class LabelWithChange(BoxLayout, TouchBehavior):
         self.label = MDLabel(text=f"{self.name_}:", size_hint_x=0.3)
         self.btn_change = MDFlatButton(text="CHANGE", on_release=self.click_change,
                                        theme_text_color="Custom", text_color=app.theme_cls.primary_color)
-        self.btn_add = MDRaisedButton(text="ADD", on_release=self.click_add)
-        self.btn_cancel = MDFlatButton(text="Cancel", on_release=self.click_cancel,
-                                       theme_text_color="Custom", text_color=app.theme_cls.primary_color)
+        self.btn_add = MDIconButton(icon='check', on_release=self.click_add,
+                                    theme_text_color="Custom", text_color=app.theme_cls.primary_light)
+        self.btn_cancel = MDIconButton(icon='window-close', on_release=self.click_cancel,
+                                       theme_text_color="Custom", text_color=app.theme_cls.error_color)
 
         self.widgets_mode_view = [self.label,
                                   self.label_value,
