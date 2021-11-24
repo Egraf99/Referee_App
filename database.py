@@ -216,15 +216,17 @@ class ConnDB:
 class Game:
     """Класс, определяющий игру из БД."""
     # dict of status icon, color, name
-    status_icn = {"not_passed": ("calendar-alert", colors["Yellow"]["800"], "Не проведена"),
-                  "passed": ("calendar-check", colors["LightGreen"]["400"], "Проведена"),
+    status_icn = {"not_passed": ("calendar-alert", colors["Red"]["800"], "Не проведена"),
+                  "passed": ("calendar-check", colors["Yellow"]["300"], "Проведена"),
                   "pay_done": ("calendar-check", colors["Green"]["700"], "Оплачено"),
                   }
     # list future attribute
     attribute = ("id_in_db",
                  "league", "date", "time", "stadium",
                  "team_home",
+                 "team_home_year",
                  "team_guest",
+                 "team_guest_year",
                  "referee_chief",
                  "referee_first",
                  "referee_second",
@@ -257,6 +259,9 @@ class Game:
         self.status_key = self._get_status(self.game_passed, self.pay_done)
         self.status = self.status_icn[self.status_key]
 
+    def __repr__(self):
+        return f"{__class__.__name__} with id {self.id_in_db!r}"
+
     def _set_referee(self, **kwargs):
         for referee in ["referee_chief", "referee_first", "referee_second", "referee_reserve"]:
             referee_id = kwargs.pop(referee, None)
@@ -276,7 +281,8 @@ class Game:
     def _set_team(self, **kwargs):
         for team in ["team_home", "team_guest"]:
             team_id = kwargs.pop(team, None)
-            team_obj = Team(team_id) if team_id else None
+            team_age = kwargs.pop(f"{team}_year", None)
+            team_obj = Team(team_id, team_age) if team_id else None
             setattr(self, team, team_obj)
 
     @staticmethod
@@ -302,17 +308,27 @@ class Referee:
     def __init__(self, id_: int):
         self.id = id_
         self.first_name, self.second_name, self.third_name, self.phone, category_id = self._get_attr_from_db()[0]
+        print(self.first_name, self.second_name, self.third_name)
         self.category = Category(category_id)
+
+    def __repr__(self):
+        return f"{__class__.__name__} {self.second_name!r} {self.first_name!r}"
 
     def _get_attr_from_db(self):
         return take_many_data("first_name, second_name, third_name, phone, category_id",
                               "Referee", {"id": self.id})
+
+    def get_name(self, what_name: list):
+        pass
 
 
 class League:
     def __init__(self, id_: int):
         self.id = id_
         self.name = self._get_name_from_db()
+
+    def __repr__(self):
+        return f"{__class__.__name__} {self.name!r}"
 
     def _get_name_from_db(self):
         return take_one_data("name", "League", {"id": self.id})
@@ -324,14 +340,21 @@ class Stadium:
         self.name, self.address, city_id = self._get_attr_from_db()[0]
         self.city = City(city_id)
 
+    def __repr__(self):
+        return f"{__class__.__name__} {self.name!r}"
+
     def _get_attr_from_db(self):
         return take_many_data("name, address, city_id", "Stadium", {"id": self.id})
 
 
 class Team:
-    def __init__(self, id_: int):
+    def __init__(self, id_: int, age: int):
         self.id = id_
         self.name = self._get_name_from_db()
+        self.age = age
+
+    def __repr__(self):
+        return f"{__class__.__name__} {self.name!r}"
 
     def _get_name_from_db(self):
         return take_one_data("name", "Team", {"id": self.id})
@@ -342,6 +365,9 @@ class Category:
         self.id = id_
         self.name = self._get_name_from_db()
 
+    def __repr__(self):
+        return f"{__class__.__name__} {self.name!r}"
+
     def _get_name_from_db(self):
         return take_one_data("name", "Category", {"id": self.id})
 
@@ -350,6 +376,9 @@ class City:
     def __init__(self, id_: int):
         self.id = id_
         self.name = self._get_name_from_db()
+
+    def __repr__(self):
+        return f"{__class__.__name__} {self.name!r}"
 
     def _get_name_from_db(self):
         return take_one_data("name", "City", {"id": self.id})

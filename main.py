@@ -228,6 +228,10 @@ class InfoDialogWindow(DialogWindow):
         self.buttons = [MDFlatButton(text="CANCEL", on_release=self.dismiss, theme_text_color="Custom",
                                      text_color=app.theme_cls.primary_color)]
 
+        self.size_hint = (None, None)
+        self.width = dp(500)
+        self.height = dp(650)
+
         super(InfoDialogWindow, self).__init__()
 
     def _set_content_cls(self, type_, **kwargs):
@@ -305,6 +309,23 @@ class DialogContent(RecycleView):
 
     def set_default_box_height(self):
         self.box.height = self.default_box_height
+
+    def _get_height(self):
+        """Устанавливает высоту Content в зависимости от количества items."""
+        height = len(self.items) * 70
+        height = 400 if height > 400 else height
+        return dp(height)
+
+    def _get_box_height(self):
+        """Устанавливает высоту BoxLayout в зависимости от количества items и их заданной высоты."""
+        # высота item, если она не указана
+        self.default_item_height = getattr(self, "default_item_height", 62)
+        self.default_box_height = self._get_items_height(len(self.items))
+
+        return dp(self.default_box_height)
+
+    def _get_items_height(self, count_items: int):
+        return self.default_item_height * count_items
 
     @abstractmethod
     def on_tf_text_validate(self, caller):
@@ -416,6 +437,8 @@ class DialogContent(RecycleView):
             self._add_widget(StadiumLWC(game=self.game, **kwargs), box)
         elif type_ == "team":
             self._add_widget(TeamLWC(game=self.game, **kwargs), box)
+        elif type_ == "year":
+            self._add_widget(YearLWC(game=self.game, **kwargs), box)
         elif type_ == "referee":
             self._add_widget(RefereeLWC(game=self.game, **kwargs), box)
         else:
@@ -425,23 +448,6 @@ class DialogContent(RecycleView):
         box.add_widget(widget)
         self.children_.append(widget)
 
-    def _get_height(self):
-        """Устанавливает высоту Content в зависимости от количества items."""
-        height = len(self.items) * 70
-        height = 400 if height > 400 else height
-        return dp(height)
-
-    def _get_box_height(self):
-        """Устанавливает высоту BoxLayout в зависимости от количества items и их заданной высоты."""
-        # высота item, если она не указана
-        self.default_item_height = getattr(self, "default_item_height", 62)
-        self.default_box_height = self._get_items_height(len(self.items))
-
-        return dp(self.default_box_height)
-
-    def _get_items_height(self, count_items: int):
-        return self.default_item_height * count_items
-
 
 class InfoDialogContent(DialogContent):
     def __init__(self, **kwargs):
@@ -449,7 +455,7 @@ class InfoDialogContent(DialogContent):
         super(InfoDialogContent, self).__init__()
 
     def on_tf_text_validate(self, caller):
-        caller.check_input()
+        caller.parent.parent.click_add()
 
 
 class AddDialogContent(DialogContent):
@@ -587,14 +593,28 @@ class InfoGameContent(InfoDialogContent):
                 {'name': 'Time', 'class': 'label_with_change', 'type': 'time'},
             ),
             {'name': 'Stadium', 'class': 'label_with_change', 'type': 'stadium'},
-            {'name': 'R. chief', 'class': 'label_with_change', 'type': 'referee', 'data_key': 'referee_chief'},
-            {'name': 'R. first', 'class': 'label_with_change', 'type': 'referee', 'data_key': 'referee_first'},
-            {'name': 'R. second', 'class': 'label_with_change', 'type': 'referee',
-             'data_key': 'referee_second'},
-            {'name': 'R. reserve', 'class': 'label_with_change', 'type': 'referee',
-             'data_key': 'referee_reserve'},
-            {'name': 'T. home', 'class': 'label_with_change', 'type': 'team', 'data_key': 'team_home'},
-            {'name': 'T. guest', 'class': 'label_with_change', 'type': 'team', 'data_key': 'team_guest'},
+            (
+                {'class': 'boxlayout', 'orientation': 'horizontal', 'spacing': 10},
+                {'name': 'R. chief', 'class': 'label_with_change', 'type': 'referee', 'data_key': 'referee_chief'},
+                {'name': 'T. home', 'class': 'label_with_change', 'type': 'team', 'data_key': 'team_home'},
+            ),
+            (
+                {'class': 'boxlayout', 'orientation': 'horizontal', 'spacing': 10},
+                {'name': 'R. first', 'class': 'label_with_change', 'type': 'referee', 'data_key': 'referee_first'},
+                {'name': 'T.H. year', 'class': 'label_with_change', 'type': 'year', 'data_key': 'team_home'},
+            ),
+            (
+                {'class': 'boxlayout', 'orientation': 'horizontal', 'spacing': 10},
+                {'name': 'R. second', 'class': 'label_with_change', 'type': 'referee',
+                 'data_key': 'referee_second'},
+                {'name': 'T. guest', 'class': 'label_with_change', 'type': 'team', 'data_key': 'team_guest'},
+            ),
+            (
+                {'class': 'boxlayout', 'orientation': 'horizontal', 'spacing': 10},
+                {'name': 'R. reserve', 'class': 'label_with_change', 'type': 'referee',
+                 'data_key': 'referee_reserve'},
+                {'name': 'T.G. year', 'class': 'label_with_change', 'type': 'year', 'data_key': 'team_guest'},
+            ),
         )
 
         super(InfoGameContent, self).__init__(**kwargs)
@@ -1220,6 +1240,7 @@ class GameCheck(CheckBox):
 
 class LabelWithChange(BoxLayout, TouchBehavior):
     def __init__(self, game=None, **kwargs):
+        self.id = 'box'
         self.orientation = "horizontal"
         self.padding = dp(10)
         self.game = game
@@ -1228,8 +1249,9 @@ class LabelWithChange(BoxLayout, TouchBehavior):
         self.height = dp(5)
         super(LabelWithChange, self).__init__()
 
+        self.label_box = ObjectProperty()
+        self.label_name = ObjectProperty()
         self.label_value = ObjectProperty()
-        self.label = ObjectProperty()
         self.text_field = ObjectProperty()
         self.btn_change = ObjectProperty()
         self.btn_add = ObjectProperty()
@@ -1242,45 +1264,47 @@ class LabelWithChange(BoxLayout, TouchBehavior):
 
     def show(self):
         self._init_textfield()
-        self.label = MDLabel(text=f"{self.name_}:")
-        self.label_value = MDLabel(text=self.value)
-
-        self.widgets_mode_view = [self.label_value,
-                                  ]
-
-        self.widgets_mode_change = [self.box_tf,
-                                    ]
+        self.label_box = BoxLayout(orientation='horizontal')
+        self.label_name = MDLabel(text=f"{self.name_}: ",
+                                  halign='right',
+                                  theme_text_color="Custom",
+                                  text_color=app.theme_cls.primary_color,
+                                  )
+        self.label_value = MDLabel(text=f"{self.value}",
+                                   halign='left',
+                                   )
+        for widget in (self.label_name, self.label_value):
+            self.label_box.add_widget(widget)
 
         self.change_mode("view")
 
-    def on_long_touch(self, touch, *args):
-        self.change_mode("change")
-
-    def change_mode(self, mode: str):
-        assert mode in ["change", "view"]
-        self.clear_widgets()
-
-        if mode == "change":
-            self.text_field.text = self.value
-            Clock.schedule_once(self._focus_textfield, 0.5)
-            self.add_widget(self.box_tf)
-        elif mode == "view":
-            self.add_widget(self.label_value)
-        else:
-            raise AttributeError("mode must be 'change' or 'view'")
-
     def _init_textfield(self):
         self.box_tf = BoxLayout(orientation='horizontal')
-        self.text_field.size_hint_x = None
-        self.text_field.size = (dp(120), 1)
         self.btn_add = MDIconButton(icon='check',
                                     on_release=self.click_add,
                                     theme_text_color="Custom", text_color=colors['Green']['700'])
         self.btn_cancel = MDIconButton(icon='window-close',
                                        on_release=self.click_cancel,
                                        theme_text_color="Custom", text_color=colors['Red']['700'])
-        for widget in [self.text_field, self.btn_cancel, self.btn_add]:
+        for widget in [self.btn_cancel, self.text_field, self.btn_add]:
             self.box_tf.add_widget(widget)
+
+    def on_long_touch(self, touch, *args):
+        self.change_mode("change")
+        # self.parent.parent.parent - InfoGameContent
+        self.parent.parent.parent.scroll_to(self.text_field)
+
+    def change_mode(self, mode: str):
+        assert mode in ["change", "view"]
+        self.clear_widgets()
+
+        if mode == "change":
+            Clock.schedule_once(self._focus_textfield, 0.5)
+            self.add_widget(self.box_tf)
+        elif mode == "view":
+            self.add_widget(self.label_box)
+        else:
+            raise AttributeError("mode must be 'change' or 'view'")
 
     def _focus_textfield(self, dp=None):
         self.text_field.focus = True
@@ -1339,6 +1363,15 @@ class TeamLWC(LabelWithChange):
         self.text_field = TeamTF(notnull=True, **kwargs)
         team = getattr(self.game, kwargs.pop('data_key'))
         self.value = team.name if team else ''
+        self.show()
+
+
+class YearLWC(LabelWithChange):
+    def __init__(self, **kwargs):
+        super(YearLWC, self).__init__(**kwargs)
+        self.text_field = YearTF(notnull=True, **kwargs)
+        team = getattr(self.game, kwargs.pop('data_key'))
+        self.value = team.age if getattr(team, 'age', None) else ''
         self.show()
 
 
