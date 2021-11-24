@@ -110,7 +110,7 @@ class GamesTable(MDDataTable, TouchBehavior):
         # проверка, если в будущем будет несколько таблиц с заданными показываемыми значениями
         # значения showed_data должны состоять из ключей data_dict
         assert all(map(lambda data: data in Game.attribute, self.showed_data)), "" \
-                                                                            f"showed_data might be in {Game.attribute}"
+                                                                                f"showed_data might be in {Game.attribute}"
         # копируем, чтобы при преобразовании имен данных для поиска в БД не изменять показываемые в таблицке дынные
         self.data_for_db = deepcopy(self.showed_data)
 
@@ -445,7 +445,7 @@ class DialogContent(RecycleView):
 
 class InfoDialogContent(DialogContent):
     def __init__(self, **kwargs):
-        self.default_item_height = 64
+        self.default_item_height = 70
         super(InfoDialogContent, self).__init__()
 
     def on_tf_text_validate(self, caller):
@@ -581,8 +581,11 @@ class InfoGameContent(InfoDialogContent):
     def __init__(self, **kwargs):
         self.game = kwargs["data_cls"]
         self.items = (
-            {'name': 'Date', 'class': 'label_with_change', 'type': 'date'},
-            {'name': 'Time', 'class': 'label_with_change', 'type': 'time'},
+            (
+                {'class': 'boxlayout', 'orientation': 'horizontal', 'spacing': 10},
+                {'name': 'Date', 'class': 'label_with_change', 'type': 'date'},
+                {'name': 'Time', 'class': 'label_with_change', 'type': 'time'},
+            ),
             {'name': 'Stadium', 'class': 'label_with_change', 'type': 'stadium'},
             {'name': 'R. chief', 'class': 'label_with_change', 'type': 'referee', 'data_key': 'referee_chief'},
             {'name': 'R. first', 'class': 'label_with_change', 'type': 'referee', 'data_key': 'referee_first'},
@@ -1218,10 +1221,11 @@ class GameCheck(CheckBox):
 class LabelWithChange(BoxLayout, TouchBehavior):
     def __init__(self, game=None, **kwargs):
         self.orientation = "horizontal"
-        self.padding = 10
+        self.padding = dp(10)
         self.game = game
         self.name_ = kwargs.pop("name", '')
 
+        self.height = dp(5)
         super(LabelWithChange, self).__init__()
 
         self.label_value = ObjectProperty()
@@ -1237,26 +1241,14 @@ class LabelWithChange(BoxLayout, TouchBehavior):
         return f"{__class__.__name__} of {self.name_!r}"
 
     def show(self):
-        self.text_field.size_hint_x = .5
-        self.text_field.pos_hint = {"x": .3, "y": -0.18}
-        self.label_value = MDLabel(text=self.value, size_hint_x=.7)
-        self.label = MDLabel(text=f"{self.name_}:", size_hint_x=0.3)
-        self.btn_change = MDFlatButton(text="CHANGE", on_release=self.click_change,
-                                       theme_text_color="Custom", text_color=app.theme_cls.primary_color)
-        self.btn_add = MDIconButton(icon='check', on_release=self.click_add,
-                                    theme_text_color="Custom", text_color=app.theme_cls.primary_light)
-        self.btn_cancel = MDIconButton(icon='window-close', on_release=self.click_cancel,
-                                       theme_text_color="Custom", text_color=app.theme_cls.error_color)
+        self._init_textfield()
+        self.label = MDLabel(text=f"{self.name_}:")
+        self.label_value = MDLabel(text=self.value)
 
-        self.widgets_mode_view = [self.label,
-                                  self.label_value,
-                                  self.btn_change,
+        self.widgets_mode_view = [self.label_value,
                                   ]
 
-        self.widgets_mode_change = [self.label,
-                                    self.text_field,
-                                    self.btn_cancel,
-                                    self.btn_add,
+        self.widgets_mode_change = [self.box_tf,
                                     ]
 
         self.change_mode("view")
@@ -1271,14 +1263,24 @@ class LabelWithChange(BoxLayout, TouchBehavior):
         if mode == "change":
             self.text_field.text = self.value
             Clock.schedule_once(self._focus_textfield, 0.5)
-            widgets = self.widgets_mode_change
+            self.add_widget(self.box_tf)
         elif mode == "view":
-            widgets = self.widgets_mode_view
+            self.add_widget(self.label_value)
         else:
             raise AttributeError("mode must be 'change' or 'view'")
 
-        for widget in widgets:
-            self.add_widget(widget)
+    def _init_textfield(self):
+        self.box_tf = BoxLayout(orientation='horizontal')
+        self.text_field.size_hint_x = None
+        self.text_field.size = (dp(120), 1)
+        self.btn_add = MDIconButton(icon='check',
+                                    on_release=self.click_add,
+                                    theme_text_color="Custom", text_color=colors['Green']['700'])
+        self.btn_cancel = MDIconButton(icon='window-close',
+                                       on_release=self.click_cancel,
+                                       theme_text_color="Custom", text_color=colors['Red']['700'])
+        for widget in [self.text_field, self.btn_cancel, self.btn_add]:
+            self.box_tf.add_widget(widget)
 
     def _focus_textfield(self, dp=None):
         self.text_field.focus = True
