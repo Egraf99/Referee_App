@@ -7,6 +7,7 @@ from math import ceil
 from typing import Optional, Any, Union, List, Tuple
 
 from kivy.uix.widget import WidgetException, Widget
+from kivymd.uix.banner import MDBanner
 from kivymd.uix.snackbar import Snackbar
 from kivy.clock import Clock
 from kivy.uix.boxlayout import BoxLayout
@@ -91,14 +92,14 @@ class GamesTable(MDDataTable, TouchBehavior):
 
         self.cell_size = dp(25)
         # ключи showed_data должны совпадать с именами атрибутов класса Game
-        self.data_dict = {"date": ('Дата', dp(20)),
-                          "time": ('Время', dp(12)),
-                          "league": ('Лига',),
-                          "stadium": ('Стадион',),
-                          "team_home": ('Хозяева',),
-                          "team_guest": ('Гости',),
-                          "referee_chief": ('Судья',),
-                          "status": ('Статус', dp(30)),
+        self.data_dict = {"date": ('Date', dp(20)),
+                          "time": ('Time', dp(12)),
+                          "league": ('League',),
+                          "stadium": ('Stadium',),
+                          "team_home": ('Home team',),
+                          "team_guest": ('Guest team',),
+                          "referee_chief": ('Referee',),
+                          "status": ('Status', dp(30)),
                           }
 
         self.showed_data = ["date",
@@ -348,6 +349,7 @@ class DialogContent(RecycleView):
 
         for item in items:
             if type(item) == tuple:
+                # рекурсия с новым box'ом
                 self._add_items_in_box(item, box)
 
             elif type(item) == dict:
@@ -360,8 +362,8 @@ class DialogContent(RecycleView):
 
                 if class_ == "boxlayout":
                     new_box = MDBoxLayout(orientation=item.pop("orientation", "vertical"),
-                                          spacing=item.pop("spacing", 0),
-                                          padding=item.pop("padding", 0)
+                                          spacing=dp(item.pop("spacing", 0)),
+                                          padding=dp(item.pop("padding", 0))
                                           )
                     box.add_widget(new_box)
                     box = new_box
@@ -388,6 +390,10 @@ class DialogContent(RecycleView):
 
                 elif class_ == "label_with_change":
                     self._add_label_with_change(type_, box, parent_=self, **item)
+        self._reformat_items(box)
+
+    def _reformat_items(self, box):
+        """Форматирует items (например, размер или положение) после добавления всех items."""
 
     def _add_textfield(self, type_, box, **kwargs):
         if type_ == 'date':
@@ -438,7 +444,9 @@ class DialogContent(RecycleView):
         elif type_ == "team":
             self._add_widget(TeamLWC(game=self.game, **kwargs), box)
         elif type_ == "year":
-            self._add_widget(YearLWC(game=self.game, **kwargs), box)
+            year_lwc = YearLWC(game=self.game, **kwargs)
+            if year_lwc.is_filled():
+                self._add_widget(year_lwc, box)
         elif type_ == "referee":
             self._add_widget(RefereeLWC(game=self.game, **kwargs), box)
         else:
@@ -456,6 +464,18 @@ class InfoDialogContent(DialogContent):
 
     def on_tf_text_validate(self, caller):
         caller.parent.parent.click_add()
+
+    def _reformat_items(self, box):
+        self._clear_empty_box(box)
+        for item in self.children_:
+            try:
+                item.label_name.width = item.label_width
+            except AttributeError:
+                pass
+
+    def _clear_empty_box(self, box):
+        if len(box.children) == 0:
+            self.box.remove_widget(box)
 
 
 class AddDialogContent(DialogContent):
@@ -595,26 +615,25 @@ class InfoGameContent(InfoDialogContent):
             {'name': 'Stadium', 'class': 'label_with_change', 'type': 'stadium'},
             (
                 {'class': 'boxlayout', 'orientation': 'horizontal', 'spacing': 10},
-                {'name': 'R. chief', 'class': 'label_with_change', 'type': 'referee', 'data_key': 'referee_chief'},
-                {'name': 'T. home', 'class': 'label_with_change', 'type': 'team', 'data_key': 'team_home'},
+                {'name': 'T. home', 'class': 'label_with_change', 'type': 'team', 'data_key': 'team_home',
+                 'halign': 'center'},
+                {'text': 'vs.', 'class': 'label', 'size_hint_x': 0.2},
+                {'name': 'T. guest', 'class': 'label_with_change', 'type': 'team', 'data_key': 'team_guest',
+                 'halign': 'center'},
             ),
             (
-                {'class': 'boxlayout', 'orientation': 'horizontal', 'spacing': 10},
-                {'name': 'R. first', 'class': 'label_with_change', 'type': 'referee', 'data_key': 'referee_first'},
-                {'name': 'T.H. year', 'class': 'label_with_change', 'type': 'year', 'data_key': 'team_home'},
+                {'class': 'boxlayout', 'orientation': 'horizontal', 'padding': 0},
+                {'name': 'T.H. year', 'class': 'label_with_change', 'type': 'year', 'data_key': 'team_home',
+                 'halign': 'center'},
+                {'name': 'T.G. year', 'class': 'label_with_change', 'type': 'year', 'data_key': 'team_guest',
+                 'halign': 'center'},
             ),
-            (
-                {'class': 'boxlayout', 'orientation': 'horizontal', 'spacing': 10},
-                {'name': 'R. second', 'class': 'label_with_change', 'type': 'referee',
-                 'data_key': 'referee_second'},
-                {'name': 'T. guest', 'class': 'label_with_change', 'type': 'team', 'data_key': 'team_guest'},
-            ),
-            (
-                {'class': 'boxlayout', 'orientation': 'horizontal', 'spacing': 10},
-                {'name': 'R. reserve', 'class': 'label_with_change', 'type': 'referee',
-                 'data_key': 'referee_reserve'},
-                {'name': 'T.G. year', 'class': 'label_with_change', 'type': 'year', 'data_key': 'team_guest'},
-            ),
+            {'name': 'R. chief', 'class': 'label_with_change', 'type': 'referee', 'data_key': 'referee_chief'},
+            {'name': 'R. first', 'class': 'label_with_change', 'type': 'referee', 'data_key': 'referee_first'},
+            {'name': 'R. second', 'class': 'label_with_change', 'type': 'referee',
+             'data_key': 'referee_second'},
+            {'name': 'R. reserve', 'class': 'label_with_change', 'type': 'referee',
+             'data_key': 'referee_reserve'},
         )
 
         super(InfoGameContent, self).__init__(**kwargs)
@@ -636,13 +655,13 @@ class AddGameContent(AddDialogContent):
                 {'class': 'expansionpanel', 'name': 'Team', 'cols': 2},
                 (
                     {'name': 'Home team', 'class': 'textfield', 'type': 'team', 'data_key': 'team_home'},
-                    {'name': 'Year home team', 'class': 'textfield', 'type': 'age', 'data_key': 'team_home_year',
+                    {'name': 'Age home team', 'class': 'textfield', 'type': 'age', 'data_key': 'team_home_year',
                      'size_hint_x': 0.35},
 
                 ),
                 (
                     {'name': 'Guest team', 'class': 'textfield', 'type': 'team', 'data_key': 'team_guest'},
-                    {'name': 'Year guest team', 'class': 'textfield', 'type': 'age', 'data_key': 'team_guest_year',
+                    {'name': 'Age guest team', 'class': 'textfield', 'type': 'age', 'data_key': 'team_guest_year',
                      'size_hint_x': 0.35}
                 ),
                 {'name': 'League', 'class': 'textfield', 'type': 'league', 'size_hint_x': 0.8},
@@ -850,7 +869,7 @@ class TextField(MDTextField):
 
     def return_data(self) -> Optional[dict]:
         """Возвращает корректные данные для взаимодействия с БД (текст или id)."""
-        if not self.text:
+        if self.required and not self.text:
             return
         else:
             return self.return_data_()
@@ -1262,37 +1281,67 @@ class LabelWithChange(BoxLayout, TouchBehavior):
     def __repr__(self):
         return f"{__class__.__name__} of {self.name_!r}"
 
-    def show(self):
+    def show(self, without_label: bool = False):
         self._init_textfield()
         self.label_box = BoxLayout(orientation='horizontal')
-        self.label_name = MDLabel(text=f"{self.name_}: ",
-                                  halign='right',
-                                  theme_text_color="Custom",
-                                  text_color=app.theme_cls.primary_color,
-                                  )
+        if not without_label:
+            self.label_name = MDLabel(text=f"{self.name_}: ",
+                                      halign='left',
+                                      size_hint_x=None,
+                                      # width=self._get_width_from_len(f"{self.name_}: "),
+                                      theme_text_color="Custom",
+                                      text_color=app.theme_cls.primary_color,
+                                      )
+            self.label_box.add_widget(self.label_name)
+
         self.label_value = MDLabel(text=f"{self.value}",
                                    halign='left',
                                    )
-        for widget in (self.label_name, self.label_value):
-            self.label_box.add_widget(widget)
+
+        self.label_box.add_widget(self.label_value)
 
         self.change_mode("view")
+        self._update_max_label_width(f"{self.name_} +: ")
+
+    def is_filled(self):
+        return bool(self.value)
 
     def _init_textfield(self):
         self.box_tf = BoxLayout(orientation='horizontal')
         self.btn_add = MDIconButton(icon='check',
                                     on_release=self.click_add,
-                                    theme_text_color="Custom", text_color=colors['Green']['700'])
+                                    theme_text_color="Custom",
+                                    text_color=colors['Green']['700'],
+                                    )
         self.btn_cancel = MDIconButton(icon='window-close',
                                        on_release=self.click_cancel,
-                                       theme_text_color="Custom", text_color=colors['Red']['700'])
+                                       theme_text_color="Custom", text_color=colors['Red']['700'],
+                                       )
         for widget in [self.btn_cancel, self.text_field, self.btn_add]:
             self.box_tf.add_widget(widget)
 
+    label_width = 0
+
+    @classmethod
+    def _update_max_label_width(cls, text: str) -> float:
+        """Обновляет ширину Label до максимальной с каждым созданием класса.
+
+                Parameters:
+                    text(str) - текст Label."""
+
+        text_width = dp(len(text) * 6)
+        if text_width > LabelWithChange.label_width:
+            LabelWithChange.label_width = text_width
+        return LabelWithChange.label_width
+
+    @staticmethod
+    def _get_width_from_len(text):
+        """Возвращает ширину виджета по количеству символов."""
+        return dp(len(text) * 8)
+
     def on_long_touch(self, touch, *args):
         self.change_mode("change")
-        # self.parent.parent.parent - InfoGameContent
-        self.parent.parent.parent.scroll_to(self.text_field)
+        self.text_field.text = ''
 
     def change_mode(self, mode: str):
         assert mode in ["change", "view"]
@@ -1313,7 +1362,7 @@ class LabelWithChange(BoxLayout, TouchBehavior):
         self.change_mode("change")
 
     def click_add(self, event=None):
-        if not self.text_field.check_input():
+        if not self.text_field.check_input() or all([self.text_field.required, not self.text_field.text]):
             self.text_field.text = ''
         else:
             DB.update("Games", self.text_field.return_data(), {"id": self.game.id_in_db})
@@ -1353,7 +1402,7 @@ class LeagueLWC(LabelWithChange):
     def __init__(self, **kwargs):
         super(LeagueLWC, self).__init__(**kwargs)
         self.text_field = LeagueTF(notnull=True, **kwargs)
-        self.value = self.game.league.name if self.game.league else '-'
+        self.value = self.game.league.name if self.game.league else ''
         self.show()
 
 
@@ -1362,8 +1411,10 @@ class TeamLWC(LabelWithChange):
         super(TeamLWC, self).__init__(**kwargs)
         self.text_field = TeamTF(notnull=True, **kwargs)
         team = getattr(self.game, kwargs.pop('data_key'))
-        self.value = team.name if team else ''
-        self.show()
+        self.value = team.name if team and team.name else ''
+        self.show(without_label=True)
+        if self.is_filled():
+            self.label_value.halign = kwargs.pop('halign', 'left')
 
 
 class YearLWC(LabelWithChange):
@@ -1372,15 +1423,19 @@ class YearLWC(LabelWithChange):
         self.text_field = YearTF(notnull=True, **kwargs)
         team = getattr(self.game, kwargs.pop('data_key'))
         self.value = team.age if getattr(team, 'age', None) else ''
-        self.show()
+        self.show(without_label=True)
+        if self.is_filled():
+            self.label_value.halign = kwargs.pop('halign', 'left')
+        else:
+            del self
 
 
 class RefereeLWC(LabelWithChange):
     def __init__(self, **kwargs):
         super(RefereeLWC, self).__init__(**kwargs)
-        self.text_field = RefereeTF(notnull=True, **kwargs)
+        self.text_field = RefereeTF(**kwargs)
         referee = getattr(self.game, kwargs.pop('data_key'))
-        self.value = referee.second_name if referee else ''
+        self.value = referee.get_name('second', 'first', 'third') if referee else ''
         self.show()
 
 

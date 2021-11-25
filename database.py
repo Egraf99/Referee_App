@@ -44,16 +44,20 @@ def take_name_from_db(table: str) -> list:
         table (str) - из какой таблицы брать значения. В классе DB должен быть метод take_{mode}.
 
     Return:
-        data (list) - список полученных имен из БД."""
+        data (list) - список кортежей полученных имен из БД."""
 
     try:
         if table == "Referee":
-            data = take_many_data("second_name", table,
+            data = take_many_data("id", "Referee",
                                   order={"ASC": ["second_name", "first_name", "third_name"]})
+            name_list = []
+            for id_ in data:
+                name_list.append((Referee(*id_).get_name('second', 'first'),))
+
+            return name_list
         else:
             data = take_many_data("name", table, order={"ASC": ["name"]})
-
-        return data
+            return data
 
     except AttributeError:
         raise AttributeError(f"ConnDB has no table '{table}'")
@@ -163,32 +167,6 @@ class ConnDB:
             values.append(conditions[name])
 
         return " AND ".join(name_list), values
-
-    # @staticmethod
-    # def _convert_data(data: dict) -> None:
-    #     """Преаобразует специальные поля (дата, время, телефон) в формат значений БД."""
-    #     if "date" in data.keys():
-    #         date = data.pop("date").split(" ")
-    #         day, month, year = map(lambda d: int(d), date[0].split("."))
-    #
-    #         _data = {'day': day, 'month': month, 'year': year}
-    #         for i in _data:
-    #             data[i] = _data[i]
-    #
-    #     if "time" in data.keys():
-    #         time = data.pop("time")
-    #         time = int(time.replace(":", ""))
-    #         data["time"] = time
-    #
-    #     if "phone" in data.keys():
-    #         # в телефоне оставляем только числа
-    #         phone_ = ''
-    #         phone = data.pop("phone")
-    #         for symbol in phone:
-    #             if symbol.isdigit():
-    #                 phone_ += symbol
-    #
-    #         data['phone'] = int(phone_)
 
     def _select_request(self, sql: str, values: Optional[list] = None, one_value: bool = False) -> list:
         self.cursor = sqlite3.connect('referee.db').cursor()
@@ -308,7 +286,6 @@ class Referee:
     def __init__(self, id_: int):
         self.id = id_
         self.first_name, self.second_name, self.third_name, self.phone, category_id = self._get_attr_from_db()[0]
-        print(self.first_name, self.second_name, self.third_name)
         self.category = Category(category_id)
 
     def __repr__(self):
@@ -318,8 +295,21 @@ class Referee:
         return take_many_data("first_name, second_name, third_name, phone, category_id",
                               "Referee", {"id": self.id})
 
-    def get_name(self, what_name: list):
-        pass
+    def get_name(self, *what_name):
+        name = ''
+        for order in what_name:
+            if order in (1, '1',  'first', 'first_name'):
+                name = " ".join((name, self.first_name)) if self.first_name else name
+            elif order in (2, '2', 'second', 'second_name'):
+                name = " ".join((name, self.second_name)) if self.second_name else name
+            elif order in (3, '3', 'third', 'third_name'):
+                name = " ".join((name, self.third_name)) if self.third_name else name
+            else:
+                raise TypeError("value in what_name must be:"
+                                "\n\t1 or 'first' or 'first_name' - for first_name"
+                                "\n\t2 or 'second' or 'second_name' - for second_name"
+                                "\n\t3 or 'third' or 'third_name' - for third_name")
+        return name.strip()
 
 
 class League:
@@ -385,5 +375,5 @@ class City:
 
 
 if __name__ == '__main__':
-    # print(take_many_data("second_name", "Referee", order={"ASC": ["second_name", "first_name"]}))
+    take_name_from_db('Referee')
     print("не тот файл, дурачок :)")
