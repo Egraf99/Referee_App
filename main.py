@@ -842,7 +842,7 @@ class TextField(MDTextField):
 
         self.have_drop_menu = False
 
-        self.check_pattern = "^.*$"
+        self.check_pattern = "^.+$"
 
     def __repr__(self):
         return f"{__class__.__name__} of {self.hint_text!r}"
