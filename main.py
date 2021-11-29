@@ -332,6 +332,9 @@ class DialogContent(RecycleView):
     def on_tf_text_validate(self, caller):
         """Вызывается при вводе текста в дочерних полях ввода."""
 
+    def on_checkbox_active(self, checkbox, value):
+        """Вызывается при установлении флажка в CheckBox."""
+
     def _add_items_in_box(self, items: list, box):
         """Добавляет items в главный BoxLayout.
 
@@ -359,6 +362,7 @@ class DialogContent(RecycleView):
 
                 class_ = item.pop('class', '')
                 type_ = item.pop('type', '')
+                item.setdefault('parent', self)
 
                 if class_ == "boxlayout":
                     new_box = MDBoxLayout(orientation=item.pop("orientation", "vertical"),
@@ -380,7 +384,7 @@ class DialogContent(RecycleView):
                     box = new_box
 
                 elif class_ == "textfield":
-                    self._add_textfield(type_, box, parent_=self, **item)
+                    self._add_textfield(type_, box, **item)
 
                 elif class_ == "checkbox":
                     self._add_checkbutton(box, **item)
@@ -389,7 +393,7 @@ class DialogContent(RecycleView):
                     self._add_label(item, box)
 
                 elif class_ == "label_with_change":
-                    self._add_label_with_change(type_, box, parent_=self, **item)
+                    self._add_label_with_change(type_, box, **item)
         self._reformat_items(box)
 
     def _reformat_items(self, box):
@@ -426,13 +430,19 @@ class DialogContent(RecycleView):
             self._add_widget(TFWithoutDrop(**kwargs), box)
 
     def _add_checkbutton(self, box: Layout, **kwargs):
-        self._add_widget(GameCheck(**kwargs), box)
+        value = 'down' if hasattr(self, 'game') and getattr(self.game, kwargs.get('data_key')) else 'normal'
+        self._add_widget(GameCheck(**kwargs, state=value), box)
 
     def _add_label(self, instr: dict, box: Layout):
         size_hint_x = instr.pop('size_hint_x', 1)
         text = instr.pop('text', '')
 
-        self._add_widget(Label(text=text, size_hint_x=size_hint_x), box)
+        colored = {}
+        if instr.pop('colored', False):
+            colored = {'theme_text_color': "Custom", 'text_color': app.theme_cls.primary_color}
+            # TODO: add several colors in text color
+
+        self._add_widget(MDLabel(text=text, size_hint_x=size_hint_x, **colored), box)
 
     def _add_label_with_change(self, type_, box: Layout, **kwargs):
         if type_ == "date":
@@ -464,6 +474,11 @@ class InfoDialogContent(DialogContent):
 
     def on_tf_text_validate(self, caller):
         caller.parent.parent.click_add()
+
+    def on_checkbox_active(self, checkbox, value):
+        data = 1 if value else 0
+        DB.update('Games', {checkbox.data_key: data}, {'id': self.game.id_in_db})
+        app.app_screen.games_screen.table_games.update()
 
     def _reformat_items(self, box):
         self._clear_empty_box(box)
@@ -609,6 +624,14 @@ class InfoGameContent(InfoDialogContent):
         self.items = (
             (
                 {'class': 'boxlayout', 'orientation': 'horizontal', 'spacing': 10},
+                {'class': 'checkbox', 'data_key': 'game_passed', 'size_hint_x': 0.1},
+                {'class': 'label', 'text': 'Game passed', 'size_hint_x': 0.2, 'colored': True},
+                {'class': 'label', 'size_hint_x': 0.2},
+                {'class': 'checkbox', 'data_key': 'pay_done', 'size_hint_x': 0.1},
+                {'class': 'label', 'text': 'Pay done', 'size_hint_x': 0.2, 'colored': True},
+            ),
+            (
+                {'class': 'boxlayout', 'orientation': 'horizontal', 'spacing': 10},
                 {'name': 'Date', 'class': 'label_with_change', 'type': 'date'},
                 {'name': 'Time', 'class': 'label_with_change', 'type': 'time'},
             ),
@@ -678,13 +701,13 @@ class AddGameContent(AddDialogContent):
             (
                 {'class': 'boxlayout', 'orientation': 'horizontal', 'spacing': 10},
                 {'class': 'checkbox', 'data_key': 'game_passed', 'size_hint_x': 0.1},
-                {'class': 'label', 'text': 'Game passed', 'size_hint_x': 0.2},
+                {'class': 'label', 'text': 'Game passed', 'size_hint_x': 0.3},
                 {'class': 'label', 'size_hint_x': 0.69}
             ),
             (
                 {'class': 'boxlayout', 'orientation': 'horizontal', 'spacing': 10},
                 {'class': 'checkbox', 'data_key': 'pay_done', 'size_hint_x': 0.1},
-                {'class': 'label', 'text': 'Pay done', 'size_hint_x': 0.2},
+                {'class': 'label', 'text': 'Pay done', 'size_hint_x': 0.3},
                 {'class': 'label', 'size_hint_x': 0.19},
                 {'class': 'textfield', 'type': 'payment', 'name': 'Payment', 'data_key': 'payment', 'size_hint_x': 0.5}
             )
@@ -1240,11 +1263,13 @@ class PaymentTF(TFWithoutDrop):
 
 class GameCheck(CheckBox):
     def __init__(self, **kwargs):
+        self.parent_ = kwargs.pop('parent')
         self.name_ = self.data_key = kwargs.pop("data_key")
         self.size_hint_x = kwargs.pop('size_hint_x', 1)
+        self.bind(active=self.on_checkbox_active)
         # self.color = app.theme_cls.primary_color
 
-        super(GameCheck, self).__init__()
+        super(GameCheck, self).__init__(**kwargs)
 
     def __repr__(self):
         return f"{__class__.__name__} of {self.name_!r}"
@@ -1255,6 +1280,9 @@ class GameCheck(CheckBox):
     def return_data(self):
         data = 1 if self.active else 0
         return {self.data_key: data}
+
+    def on_checkbox_active(self, checkbox, value):
+        self.parent_.on_checkbox_active(checkbox, value)
 
 
 class LabelWithChange(BoxLayout, TouchBehavior):
