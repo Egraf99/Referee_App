@@ -25,7 +25,8 @@ from kivymd.uix.gridlayout import MDGridLayout
 from kivymd.uix.card import MDCard
 from kivymd.uix.datatables import MDDataTable
 from kivymd.uix.dialog import MDDialog
-from kivymd.uix.button import MDFlatButton, MDFloatingActionButton, MDRaisedButton, MDTextButton, MDIconButton
+from kivymd.uix.button import MDFlatButton, MDFloatingActionButton, MDRaisedButton, MDTextButton, MDIconButton, \
+    MDRectangleFlatButton
 from kivymd.uix.textfield import MDTextField
 from kivymd.uix.label import MDLabel
 from kivymd.uix.list import OneLineAvatarIconListItem, OneLineIconListItem
@@ -110,8 +111,8 @@ class GamesTable(MDDataTable, TouchBehavior):
 
         # проверка, если в будущем будет несколько таблиц с заданными показываемыми значениями
         # значения showed_data должны состоять из ключей data_dict
-        assert all(map(lambda data: data in Game.attribute, self.showed_data)), "" \
-                                                                                f"showed_data might be in {Game.attribute}"
+        assert all(map(lambda data: data in Game.attribute,
+                       self.showed_data)), "showed_data might be in {Game.attribute}"
         # копируем, чтобы при преобразовании имен данных для поиска в БД не изменять показываемые в таблицке дынные
         self.data_for_db = deepcopy(self.showed_data)
 
@@ -227,7 +228,8 @@ class InfoDialogWindow(DialogWindow):
 
         self._set_content_cls(type_, **kwargs)
         self.buttons = [MDFlatButton(text="CANCEL", on_release=self.dismiss, theme_text_color="Custom",
-                                     text_color=app.theme_cls.primary_color)]
+                                     text_color=app.theme_cls.primary_color),
+                        ]
 
         self.size_hint = (None, None)
         self.width = dp(500)
@@ -279,7 +281,7 @@ class AddDialogWindow(DialogWindow):
         else:
             raise AttributeError(f"Incorrect type_ {type_}")
 
-    def _add_button_click(self, event) -> None:
+    def _add_button_click(self, _) -> None:
         """Вызывается при нажатии кнопки ADD"""
         success = self.content_cls.update_db()
         if success and self.caller_:
@@ -335,6 +337,9 @@ class DialogContent(RecycleView):
     def on_checkbox_active(self, checkbox, value):
         """Вызывается при установлении флажка в CheckBox."""
 
+    def delete_click(self, _):
+        """Вызывается при нажатие на кнопку Delete."""
+
     def _add_items_in_box(self, items: list, box):
         """Добавляет items в главный BoxLayout.
 
@@ -377,8 +382,12 @@ class DialogContent(RecycleView):
                                                   spacing=10,
                                                   cols=item.pop("cols", 1),
                                                   adaptive_height=True)
+
                     panel = ExpansionPanel(self,
-                                           panel_cls=MDExpansionPanelOneLine(text=item.pop("name", "")),
+                                           panel_cls=MDExpansionPanelOneLine(text=item.pop("name", ""),
+                                                                             theme_text_color=item.pop('theme',
+                                                                                                       'Primary'),
+                                                                             ),
                                            content=new_box)
                     box.add_widget(panel)
                     box = new_box
@@ -390,81 +399,97 @@ class DialogContent(RecycleView):
                     self._add_checkbutton(box, **item)
 
                 elif class_ == "label":
-                    self._add_label(item, box)
+                    self._add_label(box, item)
+
+                elif class_ == "button":
+                    self._add_button(type_, box, **item)
 
                 elif class_ == "label_with_change":
                     self._add_label_with_change(type_, box, **item)
+                # TODO: разобраться, где item, а где **item
+
         self._reformat_items(box)
 
     def _reformat_items(self, box):
         """Форматирует items (например, размер или положение) после добавления всех items."""
 
-    def _add_textfield(self, type_, box, **kwargs):
+    def _add_textfield(self, type_, box, **instr):
         if type_ == 'date':
-            self._add_widget(DateTF(**kwargs), box)
+            self._add_widget(DateTF(**instr), box)
         elif type_ == 'time':
-            self._add_widget(TimeTF(**kwargs), box)
+            self._add_widget(TimeTF(**instr), box)
         elif type_ == 'phone':
-            self._add_widget(PhoneTF(**kwargs), box)
+            self._add_widget(PhoneTF(**instr), box)
         elif type_ == 'age':
-            self._add_widget(YearTF(**kwargs), box)
+            self._add_widget(YearTF(**instr), box)
         elif type_ == 'payment':
-            self._add_widget(PaymentTF(**kwargs), box)
+            self._add_widget(PaymentTF(**instr), box)
         elif type_ == 'stadium':
-            self._add_widget(StadiumTF(**kwargs), box)
+            self._add_widget(StadiumTF(**instr), box)
         elif type_ == 'referee':
-            self._add_widget(RefereeTF(**kwargs), box)
+            self._add_widget(RefereeTF(**instr), box)
         elif type_ == 'team':
-            self._add_widget(TeamTF(**kwargs), box)
+            self._add_widget(TeamTF(**instr), box)
         elif type_ == 'league':
-            self._add_widget(LeagueTF(**kwargs), box)
+            self._add_widget(LeagueTF(**instr), box)
         elif type_ == 'category':
-            self._add_widget(CategoryTF(**kwargs), box)
+            self._add_widget(CategoryTF(**instr), box)
         elif type_ == 'city':
-            self._add_widget(CityTF(**kwargs), box)
+            self._add_widget(CityTF(**instr), box)
         elif type_ == 'payment':
-            self._add_widget(PaymentTF(**kwargs), box)
+            self._add_widget(PaymentTF(**instr), box)
         elif type_ == 'with_dropmenu':
-            self._add_widget(TFWithDrop(**kwargs), box)
+            self._add_widget(TFWithDrop(**instr), box)
         else:
-            self._add_widget(TFWithoutDrop(**kwargs), box)
+            self._add_widget(TFWithoutDrop(**instr), box)
 
-    def _add_checkbutton(self, box: Layout, **kwargs):
-        value = 'down' if hasattr(self, 'game') and getattr(self.game, kwargs.get('data_key')) else 'normal'
-        self._add_widget(GameCheck(**kwargs, state=value), box)
+    def _add_checkbutton(self, box: Layout, **instr):
+        value = 'down' if hasattr(self, 'game') and getattr(self.game, instr.get('data_key')) else 'normal'
+        self._add_widget(GameCheck(**instr, state=value), box)
 
-    def _add_label(self, instr: dict, box: Layout):
-        size_hint_x = instr.pop('size_hint_x', 1)
-        text = instr.pop('text', '')
-
+    def _add_label(self, box: Layout, instr: dict):
         colored = {}
         if instr.pop('colored', False):
             colored = {'theme_text_color': "Custom", 'text_color': app.theme_cls.primary_color}
-            # TODO: add several colors in text color
+            # TODO: добавить выбор цветов для надписи
 
-        self._add_widget(MDLabel(text=text, size_hint_x=size_hint_x, **colored), box)
+        self._add_widget(MDLabel(text=instr.pop('text', ''),
+                                 size_hint_x=instr.pop('size_hint_x', 1),
+                                 **colored,
+                                 ),
+                         box)
 
-    def _add_label_with_change(self, type_, box: Layout, **kwargs):
+    def _add_button(self, type_, box, **instr):
+        if type_ == "delete_game":
+            self._add_widget(MDRectangleFlatButton(text=instr.pop('text', ''),
+                                                   text_color=app.theme_cls.error_color,
+                                                   line_color=app.theme_cls.error_color,
+                                                   on_press=self.delete_click
+                                                   ),
+                             box, add_in_children=False)
+
+    def _add_label_with_change(self, type_, box: Layout, **instr):
         if type_ == "date":
-            self._add_widget(DataLWC(game=self.game, **kwargs), box)
+            self._add_widget(DataLWC(game=self.game, **instr), box)
         elif type_ == "time":
-            self._add_widget(TimeLWC(game=self.game, **kwargs), box)
+            self._add_widget(TimeLWC(game=self.game, **instr), box)
         elif type_ == "stadium":
-            self._add_widget(StadiumLWC(game=self.game, **kwargs), box)
+            self._add_widget(StadiumLWC(game=self.game, **instr), box)
         elif type_ == "team":
-            self._add_widget(TeamLWC(game=self.game, **kwargs), box)
+            self._add_widget(TeamLWC(game=self.game, **instr), box)
         elif type_ == "year":
-            year_lwc = YearLWC(game=self.game, **kwargs)
+            year_lwc = YearLWC(game=self.game, **instr)
             if year_lwc.is_filled():
                 self._add_widget(year_lwc, box)
         elif type_ == "referee":
-            self._add_widget(RefereeLWC(game=self.game, **kwargs), box)
+            self._add_widget(RefereeLWC(game=self.game, **instr), box)
         else:
             raise TypeError(f"Incorrect type: {type_}")
 
-    def _add_widget(self, widget, box: Layout):
+    def _add_widget(self, widget, box: Layout, add_in_children=True):
         box.add_widget(widget)
-        self.children_.append(widget)
+        if add_in_children:
+            self.children_.append(widget)
 
 
 class InfoDialogContent(DialogContent):
@@ -478,6 +503,12 @@ class InfoDialogContent(DialogContent):
     def on_checkbox_active(self, checkbox, value):
         data = 1 if value else 0
         DB.update('Games', {checkbox.data_key: data}, {'id': self.game.id_in_db})
+        app.app_screen.games_screen.table_games.update()
+
+    def delete_click(self, _):
+        # TODO: добавить появление уточняющего окна
+        DB.delete('Games', {'id': self.game.id_in_db})
+        self.parent.parent.parent.dismiss()
         app.app_screen.games_screen.table_games.update()
 
     def _reformat_items(self, box):
@@ -657,6 +688,10 @@ class InfoGameContent(InfoDialogContent):
              'data_key': 'referee_second'},
             {'name': 'R. reserve', 'class': 'label_with_change', 'type': 'referee',
              'data_key': 'referee_reserve'},
+            (
+                {'class': 'expansionpanel', 'name': 'Warning!', 'theme': 'Error'},
+                {'text': 'Delete game', 'class': 'button', 'type': 'delete_game'}
+            ),
         )
 
         super(InfoGameContent, self).__init__(**kwargs)
@@ -847,7 +882,7 @@ class DropMenu(MDDropdownMenu):
 
 class TextField(MDTextField):
     def __init__(self, name, **kwargs):
-        self.parent_ = kwargs.pop('parent_', None)
+        self.parent_ = kwargs.pop('parent', None)
         text = kwargs.pop('text', '')
         self.visible = kwargs.pop("visible", True)
 
@@ -935,7 +970,7 @@ class TFWithDrop(TextField):
                 # всплывающее окно уже открыто
                 pass
 
-    def open_drop_menu(self, dp=None):
+    def open_drop_menu(self, _=None):
         if not self.drop_menu.parent and self.focus:
             self.drop_menu.open()
 
@@ -1383,13 +1418,13 @@ class LabelWithChange(BoxLayout, TouchBehavior):
         else:
             raise AttributeError("mode must be 'change' or 'view'")
 
-    def _focus_textfield(self, dp=None):
+    def _focus_textfield(self, _=None):
         self.text_field.focus = True
 
-    def click_change(self, event=None):
+    def click_change(self, _=None):
         self.change_mode("change")
 
-    def click_add(self, event=None):
+    def click_add(self, _=None):
         if not self.text_field.check_input() or all([self.text_field.required, not self.text_field.text]):
             self.text_field.text = ''
         else:
@@ -1398,7 +1433,7 @@ class LabelWithChange(BoxLayout, TouchBehavior):
             self.change_mode('view')
             app.app_screen.games_screen.table_games.update()
 
-    def click_cancel(self, event=None):
+    def click_cancel(self, _=None):
         self.change_mode("view")
 
 

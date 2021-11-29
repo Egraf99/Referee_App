@@ -148,6 +148,21 @@ class ConnDB:
         print(sql, values)
         self._request(sql, values)
 
+    def delete(self, table: str, conditions: dict, columns: list = None):
+        columns = ", ".join(columns) if columns else ''
+        values = []
+
+        if conditions:
+            conditions_str, conditions_value = self._convert_conditions(conditions)
+            values.append(*conditions_value)
+            sql = f'''DELETE {columns} FROM {table} WHERE {conditions_str}'''
+
+        else:
+            sql = f'''DELETE {columns} FROM {table}'''
+
+        print(sql, values)
+        self._request(sql, values)
+
     @staticmethod
     def _convert_order(order) -> str:
         order_sql = []
@@ -375,5 +390,5 @@ class City:
 
 
 if __name__ == '__main__':
-    take_name_from_db('Referee')
+    # ConnDB().delete('Games', {'id': 2}, ['id', 'team_home', 'referee_chief'])
     print("не тот файл, дурачок :)")
