@@ -1,37 +1,28 @@
 import re
 
 from copy import deepcopy
-from abc import ABC, ABCMeta, abstractmethod
+from abc import abstractmethod
 from math import ceil
 
-from typing import Optional, Any, Union, List, Tuple
+from typing import Tuple
 
-from kivy.uix.widget import WidgetException, Widget
-from kivymd.uix.banner import MDBanner
-from kivymd.uix.snackbar import Snackbar
+from kivy.uix.widget import WidgetException
 from kivy.clock import Clock
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.layout import Layout
 from kivy.uix.checkbox import CheckBox
-from kivy.uix.scrollview import ScrollView
-from kivy.uix.label import Label
 from kivy.properties import ObjectProperty
 from kivy.metrics import dp
 
-from kivy.utils import get_color_from_hex
 from kivymd.uix.expansionpanel import MDExpansionPanel, MDExpansionPanelOneLine
 from kivymd.uix.boxlayout import MDBoxLayout
 from kivymd.uix.gridlayout import MDGridLayout
-from kivymd.uix.card import MDCard
 from kivymd.uix.datatables import MDDataTable
 from kivymd.uix.dialog import MDDialog
-from kivymd.uix.button import MDFlatButton, MDFloatingActionButton, MDRaisedButton, MDTextButton, MDIconButton, \
-    MDRectangleFlatButton
+from kivymd.uix.button import MDFlatButton, MDRaisedButton, MDIconButton, MDRectangleFlatButton
 from kivymd.uix.textfield import MDTextField
 from kivymd.uix.label import MDLabel
-from kivymd.uix.list import OneLineAvatarIconListItem, OneLineIconListItem
 from kivymd.uix.snackbar import Snackbar
-from kivy.uix.behaviors.focus import FocusBehavior
 from kivymd.uix.behaviors import TouchBehavior
 from kivy.uix.recycleview import RecycleView
 from kivymd.uix.menu import MDDropdownMenu
@@ -40,12 +31,40 @@ from kivymd.app import MDApp
 from database import *
 
 
-def open_dialog(text):
+def open_text_dialog(text):
     MDDialog(text=text).open()
 
 
 def open_snackbar(text):
     Snackbar(text=text).open()
+
+
+class Alert(MDDialog):
+    def __init__(self, text, action):
+        self.text = text
+        self.auto_dismiss = False,
+        self.buttons = [MDFlatButton(text='CANCEL', on_release=self.dismiss,
+                                         theme_text_color="Custom",
+                                         text_color=app.theme_cls.primary_color,
+                                         ),
+                            MDRectangleFlatButton(text='YES', on_release=self._yes,
+                                                  theme_text_color="Custom",
+                                                  text_color=app.theme_cls.error_color,
+                                                  line_color=app.theme_cls.error_color,
+                                                  ),
+
+                            ]
+
+        self.action = action
+
+        super(Alert, self).__init__()
+
+    def __repr__(self):
+        return f"Alert dialog of {self.action.__class__}"
+
+    def _yes(self, _):
+        self.dismiss()
+        self.action()
 
 
 class AppScreen(BoxLayout):
@@ -62,7 +81,8 @@ class AppScreen(BoxLayout):
         self.games_screen.open_dialog_add_game()
 
     def menu_settings(self):
-        print("menu")
+        pass
+        # TODO: сделать меню с изменением стиля, цвета, языка и т.д.
 
 
 class GameScreen:
@@ -393,27 +413,26 @@ class DialogContent(RecycleView):
                     box = new_box
 
                 elif class_ == "textfield":
-                    self._add_textfield(type_, box, **item)
+                    self._add_textfield(type_, box, item)
 
                 elif class_ == "checkbox":
-                    self._add_checkbutton(box, **item)
+                    self._add_checkbutton(box, item)
 
                 elif class_ == "label":
                     self._add_label(box, item)
 
                 elif class_ == "button":
-                    self._add_button(type_, box, **item)
+                    self._add_button(type_, box, item)
 
                 elif class_ == "label_with_change":
-                    self._add_label_with_change(type_, box, **item)
-                # TODO: разобраться, где item, а где **item
+                    self._add_label_with_change(type_, box, item)
 
         self._reformat_items(box)
 
     def _reformat_items(self, box):
         """Форматирует items (например, размер или положение) после добавления всех items."""
 
-    def _add_textfield(self, type_, box, **instr):
+    def _add_textfield(self, type_, box, instr: dict):
         if type_ == 'date':
             self._add_widget(DateTF(**instr), box)
         elif type_ == 'time':
@@ -443,7 +462,7 @@ class DialogContent(RecycleView):
         else:
             self._add_widget(TFWithoutDrop(**instr), box)
 
-    def _add_checkbutton(self, box: Layout, **instr):
+    def _add_checkbutton(self, box: Layout, instr: dict):
         value = 'down' if hasattr(self, 'game') and getattr(self.game, instr.get('data_key')) else 'normal'
         self._add_widget(GameCheck(**instr, state=value), box)
 
@@ -459,16 +478,16 @@ class DialogContent(RecycleView):
                                  ),
                          box)
 
-    def _add_button(self, type_, box, **instr):
+    def _add_button(self, type_, box, instr: dict):
         if type_ == "delete_game":
             self._add_widget(MDRectangleFlatButton(text=instr.pop('text', ''),
                                                    text_color=app.theme_cls.error_color,
                                                    line_color=app.theme_cls.error_color,
-                                                   on_press=self.delete_click
+                                                   on_release=self.delete_click
                                                    ),
                              box, add_in_children=False)
 
-    def _add_label_with_change(self, type_, box: Layout, **instr):
+    def _add_label_with_change(self, type_, box: Layout, instr: dict):
         if type_ == "date":
             self._add_widget(DataLWC(game=self.game, **instr), box)
         elif type_ == "time":
@@ -506,8 +525,10 @@ class InfoDialogContent(DialogContent):
         app.app_screen.games_screen.table_games.update()
 
     def delete_click(self, _):
-        # TODO: добавить появление уточняющего окна
-        DB.delete('Games', {'id': self.game.id_in_db})
+        Alert("Are you sure?", self.delete_game).open()
+
+    def delete_game(self, _=None):
+        # DB.delete('Games', {'id': self.game.id_in_db})
         self.parent.parent.parent.dismiss()
         app.app_screen.games_screen.table_games.update()
 
@@ -569,7 +590,7 @@ class AddDialogContent(DialogContent):
 
         if not_fill_fields:  # если есть незаполненные необходимые поля вызывает подсказку и возвращает неуспех
             not_filled = "\n".join(f"   - {text}" for text in not_fill_fields)
-            open_dialog(f"The fields:\n{not_filled}\n is not filled on")
+            open_text_dialog(f"The fields:\n{not_filled}\n is not filled on")
             return False
 
         DB.insert(self.data_table, data)
@@ -578,7 +599,7 @@ class AddDialogContent(DialogContent):
         self.parent.parent.parent.dismiss()
 
         if not self.caller_:
-            open_dialog("Successfully added")
+            open_text_dialog("Successfully added")
             app.app_screen.games_screen.table_games.update()
 
         else:
@@ -654,6 +675,7 @@ class InfoGameContent(InfoDialogContent):
         self.game = kwargs["data_cls"]
         self.items = (
             (
+                # TODO: добавить количество оплаты
                 {'class': 'boxlayout', 'orientation': 'horizontal', 'spacing': 10},
                 {'class': 'checkbox', 'data_key': 'game_passed', 'size_hint_x': 0.1},
                 {'class': 'label', 'text': 'Game passed', 'size_hint_x': 0.2, 'colored': True},
@@ -688,10 +710,7 @@ class InfoGameContent(InfoDialogContent):
              'data_key': 'referee_second'},
             {'name': 'R. reserve', 'class': 'label_with_change', 'type': 'referee',
              'data_key': 'referee_reserve'},
-            (
-                {'class': 'expansionpanel', 'name': 'Warning!', 'theme': 'Error'},
-                {'text': 'Delete game', 'class': 'button', 'type': 'delete_game'}
-            ),
+            {'text': 'Delete game', 'class': 'button', 'type': 'delete_game'},
         )
 
         super(InfoGameContent, self).__init__(**kwargs)
@@ -1057,7 +1076,7 @@ class TFWithDrop(TextField):
             id_ = take_one_data("id", self.data_table, conditions_dict)
             return {self.data_key: id_}
         except TypeError:
-            open_dialog(f'Name "{self.text}" is not found in the table {self.data_table.capitalize()}')
+            open_text_dialog(f'Name "{self.text}" is not found in the table {self.data_table.capitalize()}')
 
 
 class TFWithoutDrop(TextField):
@@ -1476,8 +1495,7 @@ class TeamLWC(LabelWithChange):
         team = getattr(self.game, kwargs.pop('data_key'))
         self.value = team.name if team and team.name else ''
         self.show(without_label=True)
-        if self.is_filled():
-            self.label_value.halign = kwargs.pop('halign', 'left')
+        self.label_value.halign = kwargs.pop('halign', 'left')
 
 
 class YearLWC(LabelWithChange):
@@ -1487,10 +1505,7 @@ class YearLWC(LabelWithChange):
         team = getattr(self.game, kwargs.pop('data_key'))
         self.value = team.age if getattr(team, 'age', None) else ''
         self.show(without_label=True)
-        if self.is_filled():
-            self.label_value.halign = kwargs.pop('halign', 'left')
-        else:
-            del self
+        self.label_value.halign = kwargs.pop('halign', 'left')
 
 
 class RefereeLWC(LabelWithChange):
