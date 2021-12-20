@@ -44,16 +44,16 @@ class Alert(MDDialog):
         self.text = text
         self.auto_dismiss = False,
         self.buttons = [MDFlatButton(text='CANCEL', on_release=self.dismiss,
-                                         theme_text_color="Custom",
-                                         text_color=app.theme_cls.primary_color,
-                                         ),
-                            MDRectangleFlatButton(text='YES', on_release=self._yes,
-                                                  theme_text_color="Custom",
-                                                  text_color=app.theme_cls.error_color,
-                                                  line_color=app.theme_cls.error_color,
-                                                  ),
+                                     theme_text_color="Custom",
+                                     text_color=app.theme_cls.primary_color,
+                                     ),
+                        MDRectangleFlatButton(text='YES', on_release=self._yes,
+                                              theme_text_color="Custom",
+                                              text_color=app.theme_cls.error_color,
+                                              line_color=app.theme_cls.error_color,
+                                              ),
 
-                            ]
+                        ]
 
         self.action = action
 
@@ -252,7 +252,7 @@ class InfoDialogWindow(DialogWindow):
                         ]
 
         self.size_hint = (None, None)
-        self.width = dp(500)
+        self.width = dp(600)
         self.height = dp(650)
 
         super(InfoDialogWindow, self).__init__()
@@ -367,7 +367,7 @@ class DialogContent(RecycleView):
             items (list)- список добавляемых объектов. Список может содержать в себе словарь или новый список.
                 - Если объект словарь, то объект занимает всю ширину Content.
                 - Если объект список, то все объекты внутри этого списка занимают ширину Content
-                                                                                    в новом горизонтальном BoxLayout.
+                                        в новом горизонтальном BoxLayout, который описывается первым в этом списке.
                   Ширина отдельного объекта зависит от значения 'size_hint_x' в словаре.
 
             box (BoxLayout)- контейнер для добавления объектов."""
@@ -416,7 +416,7 @@ class DialogContent(RecycleView):
                     self._add_textfield(type_, box, item)
 
                 elif class_ == "checkbox":
-                    self._add_checkbutton(box, item)
+                    self._add_checkbutton(type_, box, item)
 
                 elif class_ == "label":
                     self._add_label(box, item)
@@ -426,6 +426,9 @@ class DialogContent(RecycleView):
 
                 elif class_ == "label_with_change":
                     self._add_label_with_change(type_, box, item)
+
+                else:
+                    raise ArithmeticError(f'Incorrect type_ {type_}')
 
         self._reformat_items(box)
 
@@ -462,9 +465,17 @@ class DialogContent(RecycleView):
         else:
             self._add_widget(TFWithoutDrop(**instr), box)
 
-    def _add_checkbutton(self, box: Layout, instr: dict):
-        value = 'down' if hasattr(self, 'game') and getattr(self.game, instr.get('data_key')) else 'normal'
-        self._add_widget(GameCheck(**instr, state=value), box)
+    def _add_checkbutton(self, type_, box: Layout, instr: dict):
+        if type_ == "show_year":
+            self._add_widget(ShowYearCheck(**instr), box)
+        elif type_ == "add":
+            self._add_widget(AddGameCheck(**instr), box)
+        elif type_ == "info":
+            value = 'down' if hasattr(self, 'game') and getattr(self.game, instr.get('data_key')) else 'normal'
+            self._add_widget(InfoGameCheck(**instr, state=value), box)
+
+        else:
+            raise AttributeError(f"Incorrect type_ {type_}")
 
     def _add_label(self, box: Layout, instr: dict):
         colored = {}
@@ -497,11 +508,11 @@ class DialogContent(RecycleView):
         elif type_ == "team":
             self._add_widget(TeamLWC(game=self.game, **instr), box)
         elif type_ == "year":
-            year_lwc = YearLWC(game=self.game, **instr)
-            if year_lwc.is_filled():
-                self._add_widget(year_lwc, box)
+            self._add_widget(YearLWC(game=self.game, **instr), box)
         elif type_ == "referee":
             self._add_widget(RefereeLWC(game=self.game, **instr), box)
+        elif type_ == "payment":
+            self._add_widget(PaymentLWC(game=self.game, **instr), box)
         else:
             raise TypeError(f"Incorrect type: {type_}")
 
@@ -514,21 +525,38 @@ class DialogContent(RecycleView):
 class InfoDialogContent(DialogContent):
     def __init__(self, **kwargs):
         self.default_item_height = 70
+        self.year_box = ObjectProperty()
         super(InfoDialogContent, self).__init__()
 
     def on_tf_text_validate(self, caller):
         caller.parent.parent.click_add()
 
-    def on_checkbox_active(self, checkbox, value):
+    def bool_update_db(self, checkbox, value):
         data = 1 if value else 0
         DB.update('Games', {checkbox.data_key: data}, {'id': self.game.id_in_db})
         app.app_screen.games_screen.table_games.update()
+
+    def show_year(self, value):
+        if value:
+            self.year_box = MDBoxLayout(orientation='horizontal')
+            items = [
+                {'class': 'label', 'size_hint_x': 0.1},
+                {'name': 'T.H. year', 'class': 'label_with_change', 'type': 'year', 'data_key': 'team_home_year',
+                 'halign': 'center', 'size_hint_x': 1.7},
+                {'class': 'label', 'text': 'y.o.', 'size_hint_x': 0.11, 'halign': 'center'},
+                {'name': 'T.G. year', 'class': 'label_with_change', 'type': 'year', 'data_key': 'team_guest_year',
+                 'halign': 'center', 'size_hint_x': 0.3},
+            ]
+            self._add_items_in_box(items, self.year_box)
+            self.box.add_widget(self.year_box, index=5)
+        else:
+            self.box.remove_widget(self.year_box)
 
     def delete_click(self, _):
         Alert("Are you sure?", self.delete_game).open()
 
     def delete_game(self, _=None):
-        # DB.delete('Games', {'id': self.game.id_in_db})
+        DB.delete('Games', {'id': self.game.id_in_db})
         self.parent.parent.parent.dismiss()
         app.app_screen.games_screen.table_games.update()
 
@@ -675,33 +703,28 @@ class InfoGameContent(InfoDialogContent):
         self.game = kwargs["data_cls"]
         self.items = (
             (
-                # TODO: добавить количество оплаты
                 {'class': 'boxlayout', 'orientation': 'horizontal', 'spacing': 10},
-                {'class': 'checkbox', 'data_key': 'game_passed', 'size_hint_x': 0.1},
+                {'class': 'checkbox', 'type': 'info', 'data_key': 'game_passed', 'size_hint_x': 0.1},
                 {'class': 'label', 'text': 'Game passed', 'size_hint_x': 0.2, 'colored': True},
-                {'class': 'label', 'size_hint_x': 0.2},
-                {'class': 'checkbox', 'data_key': 'pay_done', 'size_hint_x': 0.1},
-                {'class': 'label', 'text': 'Pay done', 'size_hint_x': 0.2, 'colored': True},
+                {'class': 'checkbox', 'type': 'info', 'data_key': 'pay_done', 'size_hint_x': 0.1},
+                {'class': 'label', 'text': 'Pay done', 'size_hint_x': 0.3, 'colored': True},
             ),
             (
                 {'class': 'boxlayout', 'orientation': 'horizontal', 'spacing': 10},
                 {'name': 'Date', 'class': 'label_with_change', 'type': 'date'},
                 {'name': 'Time', 'class': 'label_with_change', 'type': 'time'},
             ),
-            {'name': 'Stadium', 'class': 'label_with_change', 'type': 'stadium'},
+            (
+                {'class': 'boxlayout', 'orientation': 'horizontal', 'spacing': 10},
+                {'name': 'Stadium', 'class': 'label_with_change', 'type': 'stadium'},
+                {'name': 'Salary', 'class': 'label_with_change', 'type': 'payment', 'data_key': 'payment'}
+            ),
             (
                 {'class': 'boxlayout', 'orientation': 'horizontal', 'spacing': 10},
                 {'name': 'T. home', 'class': 'label_with_change', 'type': 'team', 'data_key': 'team_home',
                  'halign': 'center'},
-                {'text': 'vs.', 'class': 'label', 'size_hint_x': 0.2},
+                {'class': 'checkbox', 'type': 'show_year', 'data_key': 'game_passed', 'size_hint_x': 0.1},
                 {'name': 'T. guest', 'class': 'label_with_change', 'type': 'team', 'data_key': 'team_guest',
-                 'halign': 'center'},
-            ),
-            (
-                {'class': 'boxlayout', 'orientation': 'horizontal', 'padding': 0},
-                {'name': 'T.H. year', 'class': 'label_with_change', 'type': 'year', 'data_key': 'team_home',
-                 'halign': 'center'},
-                {'name': 'T.G. year', 'class': 'label_with_change', 'type': 'year', 'data_key': 'team_guest',
                  'halign': 'center'},
             ),
             {'name': 'R. chief', 'class': 'label_with_change', 'type': 'referee', 'data_key': 'referee_chief'},
@@ -754,13 +777,13 @@ class AddGameContent(AddDialogContent):
             ),
             (
                 {'class': 'boxlayout', 'orientation': 'horizontal', 'spacing': 10},
-                {'class': 'checkbox', 'data_key': 'game_passed', 'size_hint_x': 0.1},
+                {'class': 'checkbox', 'type': 'add', 'data_key': 'game_passed', 'size_hint_x': 0.1},
                 {'class': 'label', 'text': 'Game passed', 'size_hint_x': 0.3},
                 {'class': 'label', 'size_hint_x': 0.69}
             ),
             (
                 {'class': 'boxlayout', 'orientation': 'horizontal', 'spacing': 10},
-                {'class': 'checkbox', 'data_key': 'pay_done', 'size_hint_x': 0.1},
+                {'class': 'checkbox', 'type': 'add', 'data_key': 'pay_done', 'size_hint_x': 0.1},
                 {'class': 'label', 'text': 'Pay done', 'size_hint_x': 0.3},
                 {'class': 'label', 'size_hint_x': 0.19},
                 {'class': 'textfield', 'type': 'payment', 'name': 'Payment', 'data_key': 'payment', 'size_hint_x': 0.5}
@@ -1315,7 +1338,7 @@ class PaymentTF(TFWithoutDrop):
         super(PaymentTF, self).on_text_validate()
 
 
-class GameCheck(CheckBox):
+class MyCheckBox(CheckBox):
     def __init__(self, **kwargs):
         self.parent_ = kwargs.pop('parent')
         self.name_ = self.data_key = kwargs.pop("data_key")
@@ -1323,20 +1346,46 @@ class GameCheck(CheckBox):
         self.bind(active=self.on_checkbox_active)
         # self.color = app.theme_cls.primary_color
 
-        super(GameCheck, self).__init__(**kwargs)
+        super(MyCheckBox, self).__init__(**kwargs)
 
     def __repr__(self):
         return f"{__class__.__name__} of {self.name_!r}"
 
+    def return_data(self):
+        """Какие данные показывает CheckBox."""
+
     def check(self):
         pass
 
+    def on_checkbox_active(self, checkbox, value):
+        """Функция вызывается при нажатии на CheckBox."""
+
+
+class GameCheck(MyCheckBox):
+    def __init__(self, **kwargs):
+        super(GameCheck, self).__init__(**kwargs)
+
+    def return_data(self):
+        """Returning data when calling."""
+
+
+class AddGameCheck(GameCheck):
     def return_data(self):
         data = 1 if self.active else 0
         return {self.data_key: data}
 
+
+class InfoGameCheck(GameCheck):
     def on_checkbox_active(self, checkbox, value):
-        self.parent_.on_checkbox_active(checkbox, value)
+        self.parent_.bool_update_db(checkbox, value)
+
+
+class ShowYearCheck(MyCheckBox):
+    def __init__(self, **kwargs):
+        super(ShowYearCheck, self).__init__(**kwargs)
+
+    def on_checkbox_active(self, checkbox, value):
+        self.parent_.show_year(value)
 
 
 class LabelWithChange(BoxLayout, TouchBehavior):
@@ -1359,6 +1408,8 @@ class LabelWithChange(BoxLayout, TouchBehavior):
         self.btn_cancel = ObjectProperty()
         self.widgets_mode_view = ObjectProperty()
         self.widgets_mode_change = ObjectProperty()
+
+        self.mode = "view"
 
     def __repr__(self):
         return f"{__class__.__name__} of {self.name_!r}"
@@ -1425,14 +1476,20 @@ class LabelWithChange(BoxLayout, TouchBehavior):
         self.change_mode("change")
         self.text_field.text = ''
 
+    def on_double_tap(self, touch, *args):
+        if self.mode == "change":
+            print('yre')
+
     def change_mode(self, mode: str):
         assert mode in ["change", "view"]
         self.clear_widgets()
 
         if mode == "change":
+            self.mode = "change"
             Clock.schedule_once(self._focus_textfield, 0.5)
             self.add_widget(self.box_tf)
         elif mode == "view":
+            self.mode = "view"
             self.add_widget(self.label_box)
         else:
             raise AttributeError("mode must be 'change' or 'view'")
@@ -1502,7 +1559,7 @@ class YearLWC(LabelWithChange):
     def __init__(self, **kwargs):
         super(YearLWC, self).__init__(**kwargs)
         self.text_field = YearTF(notnull=True, **kwargs)
-        team = getattr(self.game, kwargs.pop('data_key'))
+        team = getattr(self.game, kwargs.pop('data_key')[:-5])
         self.value = team.age if getattr(team, 'age', None) else ''
         self.show(without_label=True)
         self.label_value.halign = kwargs.pop('halign', 'left')
@@ -1514,6 +1571,14 @@ class RefereeLWC(LabelWithChange):
         self.text_field = RefereeTF(**kwargs)
         referee = getattr(self.game, kwargs.pop('data_key'))
         self.value = referee.get_name('second', 'first', 'third') if referee else ''
+        self.show()
+
+
+class PaymentLWC(LabelWithChange):
+    def __init__(self, **kwargs):
+        super(PaymentLWC, self).__init__(**kwargs)
+        self.text_field = PaymentTF(**kwargs)
+        self.value = self.game.payment if self.game.payment else ''
         self.show()
 
 
@@ -1531,7 +1596,7 @@ class MainApp(MDApp):
         return self.app_screen
 
 
-if __name__ == "__main__":
+if __name__ in ("__android__", "__main__"):
     app = MainApp()
     DB = ConnDB()
     app.run()
