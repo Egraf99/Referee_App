@@ -1,10 +1,11 @@
+import datetime
 import re
 
 from copy import deepcopy
 from abc import abstractmethod
 from math import ceil
 
-from typing import Tuple
+from typing import Tuple, Optional
 
 from kivy.uix.widget import WidgetException
 from kivy.clock import Clock
@@ -27,8 +28,9 @@ from kivymd.uix.behaviors import TouchBehavior
 from kivy.uix.recycleview import RecycleView
 from kivymd.uix.menu import MDDropdownMenu
 from kivymd.app import MDApp
+from kivymd.color_definitions import colors
 
-from database import *
+import database
 
 
 def open_text_dialog(text):
@@ -107,6 +109,7 @@ class GameScreen:
 
 class GamesTable(MDDataTable, TouchBehavior):
     """Класс таблицы для отображения записанных в БД игр."""
+    NULL_STR = ""
 
     def __init__(self):
         self.info_dialog = ObjectProperty()
@@ -131,7 +134,7 @@ class GamesTable(MDDataTable, TouchBehavior):
 
         # проверка, если в будущем будет несколько таблиц с заданными показываемыми значениями
         # значения showed_data должны состоять из ключей data_dict
-        assert all(map(lambda data: data in Game.attribute,
+        assert all(map(lambda data: data in database.Game.attribute,
                        self.showed_data)), "showed_data might be in {Game.attribute}"
         # копируем, чтобы при преобразовании имен данных для поиска в БД не изменять показываемые в таблицке дынные
         self.data_for_db = deepcopy(self.showed_data)
@@ -179,14 +182,17 @@ class GamesTable(MDDataTable, TouchBehavior):
 
     def _take_games(self) -> list:
         """Возвращает преобразованные в табличные значения данные из БД."""
-        games = DB.games
+        games = database.games()
         return_table_data = []
         self.list_of_games = []
 
         for game_info in games:
-            game = Game(**game_info)
-            return_table_data.append(self._return_name_data_for_table(game))
+            # создаем экземпляры игры по полученным данным
+            game = database.Game(**game_info)
             self.list_of_games.append(game)
+
+            # преобразуем показываемые данные из атрибутов созданных игр
+            return_table_data.append(self._return_name_data_for_table(game))
 
         return return_table_data
 
@@ -201,22 +207,22 @@ class GamesTable(MDDataTable, TouchBehavior):
 
             elif name_data in ["league", "stadium"]:
                 ls = getattr(game, name_data)
-                data_str = take_one_data("name", name_data.title(), {"id": ls.id}) if ls else ""
+                data_str = ls.name if ls else self.NULL_STR
 
             elif name_data in ["referee_chief", "referee_first", "referee_second", "referee_reserve"]:
-                referee = getattr(game, name_data, None)
-                data_str = referee.second_name if referee else ""
+                referee = getattr(game, name_data)
+                data_str = referee.second_name if referee else self.NULL_STR
 
             elif name_data in ["team_home", "team_guest"]:
                 team = getattr(game, name_data)
-                data_str = take_one_data("name", "Team", {"id": team.id}) if team else ""
+                data_str = team.name if team else self.NULL_STR
 
             elif name_data == "status":
                 data_str = game.status
 
             else:
-                game_attr = getattr(game, name_data, None)
-                data_str = game_attr if game_attr else ""
+                game_attr = getattr(game, name_data)
+                data_str = game_attr if game_attr else self.NULL_STR
 
             returned_list_of_data.append(data_str)
 
@@ -532,8 +538,7 @@ class InfoDialogContent(DialogContent):
         caller.parent.parent.click_add()
 
     def bool_update_db(self, checkbox, value):
-        data = 1 if value else 0
-        DB.update('Games', {checkbox.data_key: data}, {'id': self.game.id_in_db})
+        database.update('Games', {checkbox.data_key: value}, {'id': self.game.id_in_db})
         app.app_screen.games_screen.table_games.update()
 
     def show_year(self, value):
@@ -556,7 +561,7 @@ class InfoDialogContent(DialogContent):
         Alert("Are you sure?", self.delete_game).open()
 
     def delete_game(self, _=None):
-        DB.delete('Games', {'id': self.game.id_in_db})
+        database.delete('Games', {'id': self.game.id_in_db})
         self.parent.parent.parent.dismiss()
         app.app_screen.games_screen.table_games.update()
 
@@ -607,7 +612,8 @@ class AddDialogContent(DialogContent):
         for child in children:
             if isinstance(child, TextField):
                 data_, cft, required_not_fill = self._check_text_fields(child)
-                data.update(data_)
+                if data_:
+                    data.update(data_)
                 if cft:
                     caller_field_text = " ".join([caller_field_text, cft])
                 if required_not_fill:
@@ -621,8 +627,17 @@ class AddDialogContent(DialogContent):
             open_text_dialog(f"The fields:\n{not_filled}\n is not filled on")
             return False
 
-        DB.insert(self.data_table, data)
+        try:
+            # заменяем два ключа date и time на один datetime
+            data.update(
+                {"datetime": datetime.datetime.strptime(  # создаем объект datetime
+                    data.pop("date") + data.pop("time"),  # конкатенация строк даты и времени
+                    "%d.%m.%Y%H:%M")})  # format
+        except KeyError:
+            pass
 
+        database.insert(self.data_table, data)
+        print("INSERT\n\t", self.data_table, data)
         # self.parent - BoxLayout, self.parent.parent - MDCard, self.parent.parent.parent - DialogWindow
         self.parent.parent.parent.dismiss()
 
@@ -632,6 +647,7 @@ class AddDialogContent(DialogContent):
 
         else:
             self.caller_.text = caller_field_text.strip()
+            self.caller_.update_items()
             open_snackbar(f"{self.caller_.hint_text.title()} {self.caller_.text} successfully added")
 
         return True
@@ -670,7 +686,6 @@ class AddDialogContent(DialogContent):
                                         который будет записан из этого field в родительское field.
                 required_not_fill(bool) - заполненно ли field (только если field обязательно заполняется)."""
 
-        data = None
         # запоминает текст из полей, данные из которых будут записаны в вызывающем родительском поле
         caller_field_text = field.text if field.add_text_in_parent else None
 
@@ -678,10 +693,7 @@ class AddDialogContent(DialogContent):
         required_not_fill = field.required_not_fill()
 
         # записывающиеся в БД данные
-        if field.text:
-            data = field.return_data()
-
-        data = data if data else {}
+        data = field.return_data() if field.text else None
 
         return data, caller_field_text, required_not_fill
 
@@ -741,7 +753,7 @@ class InfoGameContent(InfoDialogContent):
 
 class AddGameContent(AddDialogContent):
     def __init__(self):
-        self.data_table = "games"
+        self.data_table = "Games"
         self.items = (
             (
                 {'class': 'boxlayout', 'orientation': 'horizontal', 'spacing': 10},
@@ -795,7 +807,7 @@ class AddGameContent(AddDialogContent):
 
 class AddRefereeContent(AddDialogContent):
     def __init__(self, **kwargs):
-        self.data_table = "referee"
+        self.data_table = "Referee"
         self.items = (
             {'name': 'Second name', 'class': 'textfield', 'data_key': 'second_name', 'notnull': True,
              'add_text_in_parent': True},
@@ -810,7 +822,7 @@ class AddRefereeContent(AddDialogContent):
 
 class AddStadiumContent(AddDialogContent):
     def __init__(self, **kwargs):
-        self.data_table = "stadium"
+        self.data_table = "Stadium"
         self.items = (
             {'name': 'Name', 'class': 'textfield', 'data_key': 'name', 'notnull': True, 'add_text_in_parent': True},
             {'name': 'City', 'class': 'textfield', 'type': 'city', 'notnull': True},
@@ -822,7 +834,7 @@ class AddStadiumContent(AddDialogContent):
 
 class AddLeagueContent(AddDialogContent):
     def __init__(self, **kwargs):
-        self.data_table = "league"
+        self.data_table = "League"
         self.items = (
             {'name': 'Name', 'class': 'textfield', 'data_key': 'name', 'notnull': True, 'add_text_in_parent': True})
 
@@ -831,7 +843,7 @@ class AddLeagueContent(AddDialogContent):
 
 class AddTeamContent(AddDialogContent):
     def __init__(self, **kwargs):
-        self.data_table = "team"
+        self.data_table = "Team"
         self.items = (
             {'name': 'Name', 'class': 'textfield', 'data_key': 'name', 'notnull': True, 'add_text_in_parent': True})
 
@@ -840,7 +852,7 @@ class AddTeamContent(AddDialogContent):
 
 class AddCategoryContent(AddDialogContent):
     def __init__(self, **kwargs):
-        self.data_table = "category"
+        self.data_table = "Category"
         self.items = (
             {'name': 'Name', 'class': 'textfield', 'data_key': 'name', 'notnull': True, 'add_text_in_parent': True})
 
@@ -849,7 +861,7 @@ class AddCategoryContent(AddDialogContent):
 
 class AddCityContent(AddDialogContent):
     def __init__(self, **kwargs):
-        self.data_table = "city"
+        self.data_table = "City"
         self.items = (
             {'name': 'Name', 'class': 'textfield', 'data_key': 'name', 'notnull': True, 'add_text_in_parent': True})
 
@@ -947,7 +959,7 @@ class TextField(MDTextField):
     def __repr__(self):
         return f"{__class__.__name__} of {self.hint_text!r}"
 
-    def check_input(self):
+    def check_input(self) -> bool:
         """Проверяет введеный текст."""
         if not re.match(self.check_pattern, self.text):
             return False
@@ -987,9 +999,13 @@ class TFWithDrop(TextField):
         super(TFWithDrop, self).__init__(**kwargs)
         self.add_data_dialog = ObjectProperty()
         self.have_drop_menu = True
+        self.items = database.take_name_order(self.data_table)
 
         assert hasattr(self, "name_"), "TFWithDrop must have attribute 'name_'"
         self.drop_menu = DropMenu(parent_=self)
+
+    def update_items(self):
+        self.items = database.take_name_order(self.data_table)
 
     def add_item_in_text_input(self, text_item):
         self.text = text_item
@@ -1002,7 +1018,7 @@ class TFWithDrop(TextField):
         self.drop_menu.caller = self
 
         # берем текст вызывающего поля ввода для определения строк в всплывающем меню
-        items = take_name_from_db(self.data_table)
+        items = database.take_name_order(self.data_table)
         self.drop_menu.set_items(self, [i[0] for i in items])
 
         if items:
@@ -1030,10 +1046,7 @@ class TFWithDrop(TextField):
         """Обновление items всплывающего меню, которые подходят по набранному тексту."""
         matching_items = []
 
-        # берем текст вызывающего поля ввода для определения строк в всплывающем меню
-        items = take_name_from_db(self.data_table)
-
-        for item in items:
+        for item in self.items:
             if self.text.lower() in item[0].lower():
                 matching_items.append(item)
 
@@ -1096,7 +1109,7 @@ class TFWithDrop(TextField):
 
         # запрашивает id исходя из условий
         try:
-            id_ = take_one_data("id", self.data_table, conditions_dict)
+            id_ = database.take_id_by_condition(self.data_table, conditions_dict)
             return {self.data_key: id_}
         except TypeError:
             open_text_dialog(f'Name "{self.text}" is not found in the table {self.data_table.capitalize()}')
@@ -1156,8 +1169,10 @@ class PhoneTF(TFWithoutDrop):
         super(PhoneTF, self).do_backspace(from_undo=from_undo, mode='bkspc')
 
     def on_text_validate(self):
-        self.check_input()
-        super(PhoneTF, self).on_text_validate()
+        if self.check_input():
+            super(PhoneTF, self).on_text_validate()
+        else:
+            self.text = ""
 
     def return_data_(self):
         digits = re.sub("\D", "", self.text)
@@ -1194,17 +1209,13 @@ class DateTF(TFWithoutDrop):
         super(DateTF, self).do_backspace(from_undo=from_undo, mode='bkspc')
 
     def on_text_validate(self):
-        self.check_input()
-        super(DateTF, self).on_text_validate()
+        if self.check_input():
+            super(DateTF, self).on_text_validate()
+        else:
+            self.text = ""
 
     def return_data_(self):
-        day, month, year = map(lambda text: re.sub("\D", "", text), self.text.split("."))
-        _data = {'day': int(day), 'month': int(month), 'year': int(year)}
-        date = {}
-        for i in _data:
-            date[i] = _data[i]
-
-        return date
+        return {"date": self.text}
 
 
 class TimeTF(TFWithoutDrop):
@@ -1237,12 +1248,13 @@ class TimeTF(TFWithoutDrop):
         super(TimeTF, self).do_backspace(from_undo=from_undo, mode='bkspc')
 
     def on_text_validate(self):
-        self.check_input()
-        super(TimeTF, self).on_text_validate()
+        if self.check_input():
+            super(TimeTF, self).on_text_validate()
+        else:
+            self.text = ""
 
     def return_data_(self):
-        digits = re.sub("\D", "", self.text)
-        return {self.data_key: int(digits)}
+        return {"time": self.text}
 
 
 class YearTF(TFWithoutDrop):
@@ -1260,65 +1272,67 @@ class YearTF(TFWithoutDrop):
         return super(YearTF, self).insert_text(substring, from_undo=from_undo)
 
     def on_text_validate(self):
-        self.check_input()
-        super(YearTF, self).on_text_validate()
+        if self.check_input():
+            super(YearTF, self).on_text_validate()
+        else:
+            self.text = ""
 
 
 class StadiumTF(TFWithDrop):
     def __init__(self, **kwargs):
         self.name_ = "stadium"
+        self.data_table = "Stadium"
         super(StadiumTF, self).__init__(**kwargs)
 
         self.data_key = "stadium_id"
-        self.data_table = "Stadium"
         self.what_fields_child_fill = ['name']
 
 
 class RefereeTF(TFWithDrop):
     def __init__(self, **kwargs):
         self.name_ = self.data_key = kwargs.pop('data_key')
+        self.data_table = "Referee"
         super(RefereeTF, self).__init__(**kwargs)
 
-        self.data_table = "Referee"
         self.what_fields_child_fill = ['second_name', 'first_name', 'third_name']
 
 
 class TeamTF(TFWithDrop):
     def __init__(self, **kwargs):
         self.name_ = self.data_key = kwargs.pop('data_key')
+        self.data_table = "Team"
         super(TeamTF, self).__init__(**kwargs)
 
-        self.data_table = "Team"
         self.what_fields_child_fill = ['name']
 
 
 class LeagueTF(TFWithDrop):
     def __init__(self, **kwargs):
         self.name_ = "league"
+        self.data_table = "League"
         super(LeagueTF, self).__init__(**kwargs)
 
         self.data_key = "league_id"
-        self.data_table = "League"
         self.what_fields_child_fill = ['name']
 
 
 class CategoryTF(TFWithDrop):
     def __init__(self, **kwargs):
         self.name_ = "category"
+        self.data_table = "Category"
         super(CategoryTF, self).__init__(**kwargs)
 
         self.data_key = "category_id"
-        self.data_table = "Category"
         self.what_fields_child_fill = ['name']
 
 
 class CityTF(TFWithDrop):
     def __init__(self, **kwargs):
         self.name_ = "city"
+        self.data_table = "City"
         super(CityTF, self).__init__(**kwargs)
 
         self.data_key = "city_id"
-        self.data_table = "City"
         self.what_fields_child_fill = ['name']
 
 
@@ -1371,8 +1385,7 @@ class GameCheck(MyCheckBox):
 
 class AddGameCheck(GameCheck):
     def return_data(self):
-        data = 1 if self.active else 0
-        return {self.data_key: data}
+        return {self.data_key: self.active}
 
 
 class InfoGameCheck(GameCheck):
@@ -1504,7 +1517,7 @@ class LabelWithChange(BoxLayout, TouchBehavior):
         if not self.text_field.check_input() or all([self.text_field.required, not self.text_field.text]):
             self.text_field.text = ''
         else:
-            DB.update("Games", self.text_field.return_data(), {"id": self.game.id_in_db})
+            database.update("Games", self.text_field.return_data(), {"id": self.game.id_in_db})
             self.label_value.text = self.text_field.text
             self.change_mode('view')
             app.app_screen.games_screen.table_games.update()
@@ -1598,5 +1611,4 @@ class MainApp(MDApp):
 
 if __name__ in ("__android__", "__main__"):
     app = MainApp()
-    DB = ConnDB()
     app.run()

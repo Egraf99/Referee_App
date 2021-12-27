@@ -1,209 +1,195 @@
-import sqlite3
-import datetime
+import psycopg2
+from psycopg2 import sql
 from typing import Optional, Union, Any, Dict, List
 from kivymd.color_definitions import colors
 
-
-def take_one_data(what_return: str, table: str, condition: Dict[str, Any] = None, order: dict = None) -> str:
-    """Возвращает одно (первое) значение из БД.
-
-        Parameters:
-            what_return(str) - строка, содержащая название возвращаемых столбцов.
-            table(str) - название таблицы.
-            condition(dict) - словарь условий. SELECT ... WHERE X = Y (X - ключ, Y - значение).
-            order(dict) - словарь сортировки. Доступные ключи - ASC и DESC.
-                            ORDER BY Y X (X - ключ, Y - значения).
-
-        Return:
-            name - возвращаемое значение."""
-
-    name = ConnDB().take_data(what_return, table, condition, one_value=True, order=order)
-    return name[0] if name and name[0] else None
+from config import Passwords
 
 
-def take_many_data(what_return: str, table: str, condition: Dict[str, Any] = None, order: dict = None) -> list:
-    """Возвращает все значения из БД, подходящие по условиям.
+def _request(query, mode: str, values: Union[tuple, list] = None,  one_value: bool = False):
+    conn = psycopg2.connect(dbname='referee',
+                            user=Passwords.user,
+                            password=Passwords.password,
+                            host='localhost',
+                            )
+    cursor = conn.cursor()
 
-            Parameters:
-                what_return(str) - строка, содержащая название возвращаемых столбцов.
-                table(str) - название таблицы.
-                condition(dict) - словарь условий. SELECT ... WHERE X = Y (X - ключ, Y - значение).
-                order(dict) - словарь сортировки. Доступные ключи - ASC и DESC.
-                            ORDER BY Y X (X - ключ, Y - значения).
+    def select():
+        if one_value:
+            return cursor.fetchone()
+        else:
+            return cursor.fetchall()
 
-            Return:
-                name - список возвращаемых значений."""
-
-    return ConnDB().take_data(what_return, table, condition, one_value=False, order=order)
-
-
-def take_name_from_db(table: str) -> list:
-    """Возвращает значение из БД с помощью функций класса DB.
-
-    Parameters:
-        table (str) - из какой таблицы брать значения. В классе DB должен быть метод take_{mode}.
-
-    Return:
-        data (list) - список кортежей полученных имен из БД."""
+    def commit():
+        conn.commit()
 
     try:
-        if table == "Referee":
-            data = take_many_data("id", "Referee",
-                                  order={"ASC": ["second_name", "first_name", "third_name"]})
-            name_list = []
-            for id_ in data:
-                name_list.append((Referee(*id_).get_name('second', 'first'),))
-
-            return name_list
-        else:
-            data = take_many_data("name", table, order={"ASC": ["name"]})
-            return data
-
-    except AttributeError:
-        raise AttributeError(f"ConnDB has no table '{table}'")
-
-
-class ConnDB:
-    @property
-    def games(self) -> List[dict]:
-        """Возвращает все данные по всем играм в виде списка словарей."""
-
-        column_names = ("id",
-                        "league_id",
-                        "stadium_id",
-                        "team_home",
-                        "team_guest",
-                        "referee_chief",
-                        "referee_first",
-                        "referee_second",
-                        "referee_reserve",
-                        "game_passed",
-                        "payment",
-                        "pay_done",
-                        "year",
-                        "month",
-                        "day",
-                        "time",
-                        "team_home_year",
-                        "team_guest_year",
-                        )
-
-        sql = f'''SELECT * FROM Games ORDER BY year, month, day ASC, time DESC'''
-
-        games_dict_of_kwargs = []
-        return_request = self._select_request(sql)
-        for r in return_request:
-            games_dict_of_kwargs.append(dict(zip(column_names, r)))
-
-        return games_dict_of_kwargs
-
-    def take_data(self, what_return: str, table: str,
-                  conditions: dict = None,
-                  one_value: bool = False, order: dict = None) -> Union[str, list]:
-        values = None
-        if conditions:
-            conditions_str, values = self._convert_conditions(conditions)
-            sql = f'''SELECT {what_return} FROM {table} WHERE {conditions_str}'''
-
-        else:
-            sql = f'''SELECT {what_return} FROM {table}'''
-
-        if order:
-            order_str = self._convert_order(order)
-            sql += f''' ORDER BY {order_str}'''
-        # print(sql)
-        return self._select_request(sql, values, one_value=one_value)
-
-    def insert(self, table: str, data: dict) -> None:
-        """Добавляет в БД заданные данные."""
-        # print(data)
-        for k, v in data.items():
-            data[k] = int(v) if type(v) == str and v.isdigit() else v
-
-        column = ','.join(d for d in data.keys())
-        count_values = ','.join('?' * len(data.values()))
-        values = [d for d in data.values()]
-
-        sql = f'''INSERT INTO {table}({column}) VALUES ({count_values}); '''
-
-        print(sql, values)
-        self._request(sql, values)
-
-    def update(self, table: str, data: dict, conditions: dict):
-        """Обновляет БД."""
-
-        for k, v in data.items():
-            data[k] = int(v) if type(v) == str and v.isdigit() else v
-
-        column = ','.join(f'{d}=?' for d in data.keys())
-        values = [d for d in data.values()]
-
-        if conditions:
-            conditions_str, conditions_value = self._convert_conditions(conditions)
-            values.append(*conditions_value)
-            sql = f'''UPDATE {table} SET {column} WHERE {conditions_str}'''
-        else:
-            sql = f'''UPDATE {table} SET {column}'''
-
-        print(sql, values)
-        self._request(sql, values)
-
-    def delete(self, table: str, conditions: dict, columns: list = None):
-        columns = ", ".join(columns) if columns else ''
-        values = []
-
-        if conditions:
-            conditions_str, conditions_value = self._convert_conditions(conditions)
-            values.append(*conditions_value)
-            sql = f'''DELETE {columns} FROM {table} WHERE {conditions_str}'''
-
-        else:
-            sql = f'''DELETE {columns} FROM {table}'''
-
-        print(sql, values)
-        self._request(sql, values)
-
-    @staticmethod
-    def _convert_order(order) -> str:
-        order_sql = []
-        for key in order:
-            assert key in ["ASC", "DESC"], "order keys must be 'ASC' or 'DESC'"
-            assert type(order[key]) == list, "order value type must be list"
-
-            order_sql.append(f"{', '.join(order[key])} {key}")
-        return ", ".join(order_sql)
-
-    @staticmethod
-    def _convert_conditions(conditions: dict):
-        name_list = []
-        values = []
-        for name in conditions:
-            name_list.append(f'{name} = ?')
-            values.append(conditions[name])
-
-        return " AND ".join(name_list), values
-
-    def _select_request(self, sql: str, values: Optional[list] = None, one_value: bool = False) -> list:
-        self.cursor = sqlite3.connect('referee.db').cursor()
         if values:
-            self.cursor.execute(sql, values)
+            cursor.execute(query, values)
         else:
-            self.cursor.execute(sql)
+            cursor.execute(query)
 
-        if one_value:
-            data = self.cursor.fetchone()
+        if mode == "select":
+            return select()
+        elif mode in ["insert",
+                      "delete",
+                      "commit",
+                      "update",
+                      ]:
+            commit()
         else:
-            data = self.cursor.fetchall()
+            raise AttributeError("Attribute 'mode' must be select, insert, delete or commit")
 
-        self.cursor.close()
+    finally:
+        cursor.close()
+        conn.close()
 
-        return data
 
-    def _request(self, sql, values):
-        self.conn = sqlite3.connect('referee.db')
-        self.cur = self.conn.cursor()
-        self.cur.execute(sql, values)
-        self.conn.commit()
+def _convert_order(order) -> str:
+    order_query = []
+    for key in order:
+        assert key in ["ASC", "DESC"], "order keys must be 'ASC' or 'DESC'"
+        assert type(order[key]) == list, "order value type must be list"
+
+        order_query.append(f"{', '.join(order[key])} {key}")
+    return ", ".join(order_query)
+
+
+def games() -> List[dict]:
+    """Возвращает все данные по всем играм в виде списка словарей."""
+
+    column_names = ("id",
+                    "league_id",
+                    "stadium_id",
+                    "team_home",
+                    "team_guest",
+                    "referee_chief",
+                    "referee_first",
+                    "referee_second",
+                    "referee_reserve",
+                    "game_passed",
+                    "payment",
+                    "pay_done",
+                    "datetime",
+                    "team_home_year",
+                    "team_guest_year",
+                    )
+
+    query = 'SELECT * FROM public."Games"'
+
+    games_dict_of_kwargs = []
+    return_select_request = _request(query, "select")
+    for r in return_select_request:
+        games_dict_of_kwargs.append(dict(zip(column_names, r)))
+
+    return games_dict_of_kwargs
+
+
+def take_name_order(table: str) -> Union[str, list]:
+    """Возвращает колонку name в таблице table в алфавитном порядке.
+
+        Parameter:
+            table(str) - имя таблицы."""
+
+    if table == "Referee":
+        query = sql.SQL(
+            '''SELECT second_name, first_name, third_name
+                 FROM {}
+                ORDER BY second_name, first_name, third_name
+            ''').format(sql.Identifier("Referee"))
+    else:
+        query = sql.SQL("SELECT name FROM {} ORDER BY name ASC").format(
+            sql.Identifier(table))
+
+    return _request(query, "select")
+
+
+def take_all_by_id(table: str, id_: int):
+    """Возвращает имя из таблицы table по заданному id."""
+    query = sql.SQL("SELECT * FROM {} WHERE id=%s").format(
+        sql.Identifier(table)
+    )
+
+    return _request(query, "select", values=(id_,), one_value=True)[1:]  # except id
+
+
+def take_id_by_condition(table: str, condition: dict) -> int:
+    query = sql.SQL("SELECT id FROM {} WHERE {}").format(
+        sql.Identifier(table),
+        _request_from_conditions(condition.keys(), " AND ")
+    )
+    return _request(query, "select", list(condition.values()), one_value=True)[0]
+
+
+def _request_from_conditions(condition, sep: str = ", "):
+    """Создает часть запроса проверки на равенство из списка и сепаратора.
+
+        Пример:
+            _request_from_conditions(['foo', 'bar'], ' AND ') -> 'foo=%s AND bar=%s."""
+    # список всех пар ключей и их значений
+    pairs = []
+    for key in condition:
+        pairs.append(
+            sql.SQL("=").join(
+                (sql.Identifier(key),
+                 sql.Placeholder(),)
+            )
+        )
+
+    # соединяем все пары в один запрос
+    where_query = sql.SQL(sep).join(pairs)
+    return where_query
+
+
+def _add_where_construction(query, conditions: dict, values: list):
+    if conditions:
+        query = sql.SQL(" ").join((
+            query,
+            sql.SQL("WHERE"),
+            _request_from_conditions(conditions.keys(), " AND "),
+        ))  # first bracket - call func, second - make tuple
+
+        values.append(*conditions.values())
+        return query
+
+
+def insert(table: str, data: dict) -> None:
+    """Добавляет в БД заданные данные."""
+    query = sql.SQL("INSERT INTO {} ({}) VALUES ({})").format(
+        sql.Identifier(table),
+        sql.SQL(", ").join(map(sql.Identifier, data.keys())),
+        sql.SQL(", ").join(sql.Placeholder() * len(data))
+    )
+
+    print(query, data.values())
+    _request(query, "insert", list(data.values()))
+
+
+def update(table: str, data: dict, conditions: dict):
+    """Обновляет БД."""
+    values = list(data.values())
+
+    query = sql.SQL("UPDATE {} SET {}").format(
+        sql.Identifier(table),
+        _request_from_conditions(data.keys(), ", "),
+    )
+    query = _add_where_construction(query, conditions, values)
+
+    print(query, values)
+    _request(query, "update", values)
+
+
+def delete(table: str, conditions: dict, columns: list = None):
+    values = []
+    query = sql.SQL("DELETE {} FROM {}").format(
+        sql.SQL(", ").join(columns) if columns else sql.SQL(""),
+        sql.Identifier(table),
+    )
+
+    query = _add_where_construction(query, conditions, values)
+
+    print(query, values)
+    _request(query, "delete", values)
 
 
 class Game:
@@ -234,12 +220,7 @@ class Game:
         self.referee_chief = self.referee_first = self.referee_second = self.referee_reserve \
             = self.league = self.stadium = self.team_home = self.team_guest = None
 
-        year = kwargs.pop("year", None)
-        month = kwargs.pop("month", None)
-        day = kwargs.pop("day", None)
-        time_ = kwargs.pop("time", None)
-        hour, minute = int(time_) // 100, int(time_) % 100
-        self.date = datetime.datetime(year, month, day, hour=hour, minute=minute)
+        self.date = kwargs.pop("datetime")
 
         self._set_referee(**kwargs)
         self._set_league(**kwargs)
@@ -300,20 +281,19 @@ class Game:
 class Referee:
     def __init__(self, id_: int):
         self.id = id_
-        self.first_name, self.second_name, self.third_name, self.phone, category_id = self._get_attr_from_db()[0]
-        self.category = Category(category_id)
+        self.first_name, self.second_name, self.third_name, self.phone, category_id = self._get_attr_from_db()
+        self.category = Category(category_id) if category_id else None
 
     def __repr__(self):
         return f"{__class__.__name__} {self.second_name!r} {self.first_name!r}"
 
     def _get_attr_from_db(self):
-        return take_many_data("first_name, second_name, third_name, phone, category_id",
-                              "Referee", {"id": self.id})
+        return take_all_by_id("Referee", self.id)
 
     def get_name(self, *what_name):
         name = ''
         for order in what_name:
-            if order in (1, '1',  'first', 'first_name'):
+            if order in (1, '1', 'first', 'first_name'):
                 name = " ".join((name, self.first_name)) if self.first_name else name
             elif order in (2, '2', 'second', 'second_name'):
                 name = " ".join((name, self.second_name)) if self.second_name else name
@@ -336,20 +316,20 @@ class League:
         return f"{__class__.__name__} {self.name!r}"
 
     def _get_name_from_db(self):
-        return take_one_data("name", "League", {"id": self.id})
+        return take_all_by_id("League", self.id)
 
 
 class Stadium:
     def __init__(self, id_: int):
         self.id = id_
-        self.name, self.address, city_id = self._get_attr_from_db()[0]
+        self.name, self.address, city_id = self._get_attr_from_db()
         self.city = City(city_id)
 
     def __repr__(self):
         return f"{__class__.__name__} {self.name!r}"
 
     def _get_attr_from_db(self):
-        return take_many_data("name, address, city_id", "Stadium", {"id": self.id})
+        return take_all_by_id("Stadium", self.id)
 
 
 class Team:
@@ -362,7 +342,7 @@ class Team:
         return f"{__class__.__name__} {self.name!r}"
 
     def _get_name_from_db(self):
-        return take_one_data("name", "Team", {"id": self.id})
+        return take_all_by_id("Team",  self.id)
 
 
 class Category:
@@ -374,7 +354,7 @@ class Category:
         return f"{__class__.__name__} {self.name!r}"
 
     def _get_name_from_db(self):
-        return take_one_data("name", "Category", {"id": self.id})
+        return take_all_by_id("Category", self.id)
 
 
 class City:
@@ -386,9 +366,9 @@ class City:
         return f"{__class__.__name__} {self.name!r}"
 
     def _get_name_from_db(self):
-        return take_one_data("name", "City", {"id": self.id})
+        return take_all_by_id("City", self.id)
 
 
 if __name__ == '__main__':
-    # ConnDB().delete('Games', {'id': 2}, ['id', 'team_home', 'referee_chief'])
+    print(games())
     print("не тот файл, дурачок :)")
