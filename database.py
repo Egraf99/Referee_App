@@ -64,6 +64,79 @@ def take_name_from_db(table: str) -> list:
 
 
 class ConnDB:
+    def __init__(self):
+        with open("referee.db", "a"):
+            with sqlite3.connect("referee.db") as conn:
+                cursor = conn.cursor()
+                cursor.execute("""CREATE TABLE IF NOT EXISTS Games (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                league_id INTEGER,
+                stadium_id INTEGER NOT NULL,
+                team_home INTEGER,
+                team_guest INTEGER,
+                referee_chief INTEGER NOT NULL,
+                referee_first INTEGER,
+                referee_second INTEGER,
+                referee_reserve INTEGER,
+                game_passed INTEGER,
+                payment INTEGER,
+                pay_done INTEGER,
+                year INTEGER,
+                month INTEGER,
+                day INTEGER,
+                time INTEGER,
+                team_home_year INTEGER,
+                team_guest_year INTEGER,
+                FOREIGN KEY (league_id) REFERENCES League(id),
+                FOREIGN KEY (stadium_id) REFERENCES Stadium(id),
+                FOREIGN KEY (team_home) REFERENCES Team(id),
+                FOREIGN KEY (team_guest) REFERENCES Team(id),
+                FOREIGN KEY (referee_chief) REFERENCES Referee(id),
+                FOREIGN KEY (referee_first) REFERENCES Referee(id),
+                FOREIGN KEY (referee_second) REFERENCES Referee(id),
+                FOREIGN KEY (referee_reserve) REFERENCES Referee(id)
+                )""")
+                
+                cursor.execute("""CREATE TABLE IF NOT EXISTS Category (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name CHAR (30)
+                )""")
+                
+                cursor.execute("""CREATE TABLE IF NOT EXISTS City (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name CHAR (30)
+                )""")
+                
+                cursor.execute("""CREATE TABLE IF NOT EXISTS League (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name CHAR(30)
+                )""")
+                
+                cursor.execute("""CREATE TABLE IF NOT EXISTS Referee (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                first_name CHAR(30),
+                second_name CHAR(30),
+                third_name CHAR(30),
+                phone INTEGER,
+                category_id INTEGER,
+                FOREIGN KEY (category_id) REFERENCES Category(id)
+                )""")
+
+                cursor.execute("""CREATE TABLE IF NOT EXISTS Team (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name CHAR(30)
+                )""")
+
+                cursor.execute("""CREATE TABLE IF NOT EXISTS Stadium (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT(30),
+                address TEXT,
+                city_id INTEGER,
+                FOREIGN KEY (city_id) REFERENCES City(id)
+                )""")
+
+                conn.commit()
+
     @property
     def games(self) -> List[dict]:
         """Возвращает все данные по всем играм в виде списка словарей."""
@@ -126,7 +199,7 @@ class ConnDB:
 
         sql = f'''INSERT INTO {table}({column}) VALUES ({count_values}); '''
 
-        print(sql, values)
+        # print(sql, values)
         self._request(sql, values)
 
     def update(self, table: str, data: dict, conditions: dict):
@@ -186,6 +259,7 @@ class ConnDB:
     def _select_request(self, sql: str, values: Optional[list] = None, one_value: bool = False) -> list:
         self.cursor = sqlite3.connect('referee.db').cursor()
         if values:
+            print(sql, values)
             self.cursor.execute(sql, values)
         else:
             self.cursor.execute(sql)
@@ -202,6 +276,7 @@ class ConnDB:
     def _request(self, sql, values):
         self.conn = sqlite3.connect('referee.db')
         self.cur = self.conn.cursor()
+        print(sql, values)
         self.cur.execute(sql, values)
         self.conn.commit()
 
@@ -313,7 +388,7 @@ class Referee:
     def get_name(self, *what_name):
         name = ''
         for order in what_name:
-            if order in (1, '1',  'first', 'first_name'):
+            if order in (1, '1', 'first', 'first_name'):
                 name = " ".join((name, self.first_name)) if self.first_name else name
             elif order in (2, '2', 'second', 'second_name'):
                 name = " ".join((name, self.second_name)) if self.second_name else name

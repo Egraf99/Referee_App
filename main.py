@@ -1,5 +1,4 @@
 import re
-
 from copy import deepcopy
 from abc import abstractmethod
 from math import ceil
@@ -250,10 +249,6 @@ class InfoDialogWindow(DialogWindow):
         self.buttons = [MDFlatButton(text="CANCEL", on_release=self.dismiss, theme_text_color="Custom",
                                      text_color=app.theme_cls.primary_color),
                         ]
-
-        self.size_hint = (None, None)
-        self.width = dp(600)
-        self.height = dp(650)
 
         super(InfoDialogWindow, self).__init__()
 
@@ -607,7 +602,10 @@ class AddDialogContent(DialogContent):
         for child in children:
             if isinstance(child, TextField):
                 data_, cft, required_not_fill = self._check_text_fields(child)
-                data.update(data_)
+                if data_ is False:
+                    return False
+                else:
+                    data.update(data_)
                 if cft:
                     caller_field_text = " ".join([caller_field_text, cft])
                 if required_not_fill:
@@ -657,7 +655,7 @@ class AddDialogContent(DialogContent):
                 break
 
     @staticmethod
-    def _check_text_fields(field) -> Tuple[dict, Optional[str], bool]:
+    def _check_text_fields(field) -> Tuple[Union[dict, bool], Optional[str], bool]:
         """Анализирует field и возвращает его данные.
 
             Parameter:
@@ -680,6 +678,8 @@ class AddDialogContent(DialogContent):
         # записывающиеся в БД данные
         if field.text:
             data = field.return_data()
+            if not data:
+                return False, None, False
 
         data = data if data else {}
 
@@ -709,16 +709,10 @@ class InfoGameContent(InfoDialogContent):
                 {'class': 'checkbox', 'type': 'info', 'data_key': 'pay_done', 'size_hint_x': 0.1},
                 {'class': 'label', 'text': 'Pay done', 'size_hint_x': 0.3, 'colored': True},
             ),
-            (
-                {'class': 'boxlayout', 'orientation': 'horizontal', 'spacing': 10},
-                {'name': 'Date', 'class': 'label_with_change', 'type': 'date'},
-                {'name': 'Time', 'class': 'label_with_change', 'type': 'time'},
-            ),
-            (
-                {'class': 'boxlayout', 'orientation': 'horizontal', 'spacing': 10},
-                {'name': 'Stadium', 'class': 'label_with_change', 'type': 'stadium'},
-                {'name': 'Salary', 'class': 'label_with_change', 'type': 'payment', 'data_key': 'payment'}
-            ),
+            {'name': 'Date', 'class': 'label_with_change', 'type': 'date'},
+            {'name': 'Time', 'class': 'label_with_change', 'type': 'time'},
+            {'name': 'Stadium', 'class': 'label_with_change', 'type': 'stadium'},
+            {'name': 'Salary', 'class': 'label_with_change', 'type': 'payment', 'data_key': 'payment'},
             (
                 {'class': 'boxlayout', 'orientation': 'horizontal', 'spacing': 10},
                 {'name': 'T. home', 'class': 'label_with_change', 'type': 'team', 'data_key': 'team_home',
@@ -747,8 +741,8 @@ class AddGameContent(AddDialogContent):
                 {'class': 'boxlayout', 'orientation': 'horizontal', 'spacing': 10},
                 {'name': 'Date', 'class': 'textfield', 'type': 'date', 'notnull': True, 'size_hint_x': 0.5},
                 {'name': 'Time', 'class': 'textfield', 'type': 'time', 'notnull': True, 'size_hint_x': 0.5},
-                {'name': 'Stadium', 'class': 'textfield', 'type': 'stadium', 'notnull': True},
             ),
+            {'name': 'Stadium', 'class': 'textfield', 'type': 'stadium', 'notnull': True},
             {'name': 'Chief referee', 'class': 'textfield', 'type': 'referee', 'data_key': 'referee_chief',
              'notnull': True},
             (
@@ -824,7 +818,8 @@ class AddLeagueContent(AddDialogContent):
     def __init__(self, **kwargs):
         self.data_table = "league"
         self.items = (
-            {'name': 'Name', 'class': 'textfield', 'data_key': 'name', 'notnull': True, 'add_text_in_parent': True})
+            {'name': 'Name', 'class': 'textfield', 'data_key': 'name', 'notnull': True, 'add_text_in_parent': True},
+        )
 
         super(AddLeagueContent, self).__init__(**kwargs)
 
@@ -833,7 +828,8 @@ class AddTeamContent(AddDialogContent):
     def __init__(self, **kwargs):
         self.data_table = "team"
         self.items = (
-            {'name': 'Name', 'class': 'textfield', 'data_key': 'name', 'notnull': True, 'add_text_in_parent': True})
+            {'name': 'Name', 'class': 'textfield', 'data_key': 'name', 'notnull': True, 'add_text_in_parent': True},
+        )
 
         super(AddTeamContent, self).__init__(**kwargs)
 
@@ -842,7 +838,8 @@ class AddCategoryContent(AddDialogContent):
     def __init__(self, **kwargs):
         self.data_table = "category"
         self.items = (
-            {'name': 'Name', 'class': 'textfield', 'data_key': 'name', 'notnull': True, 'add_text_in_parent': True})
+            {'name': 'Name', 'class': 'textfield', 'data_key': 'name', 'notnull': True, 'add_text_in_parent': True},
+        )
 
         super(AddCategoryContent, self).__init__(**kwargs)
 
@@ -851,7 +848,8 @@ class AddCityContent(AddDialogContent):
     def __init__(self, **kwargs):
         self.data_table = "city"
         self.items = (
-            {'name': 'Name', 'class': 'textfield', 'data_key': 'name', 'notnull': True, 'add_text_in_parent': True})
+            {'name': 'Name', 'class': 'textfield', 'data_key': 'name', 'notnull': True, 'add_text_in_parent': True},
+        )
 
         super(AddCityContent, self).__init__(**kwargs)
 
@@ -991,6 +989,12 @@ class TFWithDrop(TextField):
         assert hasattr(self, "name_"), "TFWithDrop must have attribute 'name_'"
         self.drop_menu = DropMenu(parent_=self)
 
+        self.items = None
+        self._update_items()
+
+    def _update_items(self):
+        self.items = take_name_from_db(self.data_table)
+
     def add_item_in_text_input(self, text_item):
         self.text = text_item
         self.drop_menu.dismiss()
@@ -1030,10 +1034,7 @@ class TFWithDrop(TextField):
         """Обновление items всплывающего меню, которые подходят по набранному тексту."""
         matching_items = []
 
-        # берем текст вызывающего поля ввода для определения строк в всплывающем меню
-        items = take_name_from_db(self.data_table)
-
-        for item in items:
+        for item in self.items:
             if self.text.lower() in item[0].lower():
                 matching_items.append(item)
 
@@ -1053,6 +1054,7 @@ class TFWithDrop(TextField):
             self.text = text_dropmenu
 
         self.drop_menu.dismiss()
+        self._update_items()
         super(TFWithDrop, self).on_text_validate()
 
     def _make_dict_filled_field_in_children(self) -> dict:
@@ -1095,11 +1097,12 @@ class TFWithDrop(TextField):
                 continue
 
         # запрашивает id исходя из условий
-        try:
-            id_ = take_one_data("id", self.data_table, conditions_dict)
+        id_ = take_one_data("id", self.data_table, conditions_dict)
+        if id_ is not None:
             return {self.data_key: id_}
-        except TypeError:
+        else:
             open_text_dialog(f'Name "{self.text}" is not found in the table {self.data_table.capitalize()}')
+            return False
 
 
 class TFWithoutDrop(TextField):
@@ -1267,58 +1270,58 @@ class YearTF(TFWithoutDrop):
 class StadiumTF(TFWithDrop):
     def __init__(self, **kwargs):
         self.name_ = "stadium"
+        self.data_table = "Stadium"
         super(StadiumTF, self).__init__(**kwargs)
 
         self.data_key = "stadium_id"
-        self.data_table = "Stadium"
         self.what_fields_child_fill = ['name']
 
 
 class RefereeTF(TFWithDrop):
     def __init__(self, **kwargs):
         self.name_ = self.data_key = kwargs.pop('data_key')
+        self.data_table = "Referee"
         super(RefereeTF, self).__init__(**kwargs)
 
-        self.data_table = "Referee"
         self.what_fields_child_fill = ['second_name', 'first_name', 'third_name']
 
 
 class TeamTF(TFWithDrop):
     def __init__(self, **kwargs):
         self.name_ = self.data_key = kwargs.pop('data_key')
+        self.data_table = "Team"
         super(TeamTF, self).__init__(**kwargs)
 
-        self.data_table = "Team"
         self.what_fields_child_fill = ['name']
 
 
 class LeagueTF(TFWithDrop):
     def __init__(self, **kwargs):
         self.name_ = "league"
+        self.data_table = "League"
         super(LeagueTF, self).__init__(**kwargs)
 
         self.data_key = "league_id"
-        self.data_table = "League"
         self.what_fields_child_fill = ['name']
 
 
 class CategoryTF(TFWithDrop):
     def __init__(self, **kwargs):
         self.name_ = "category"
+        self.data_table = "Category"
         super(CategoryTF, self).__init__(**kwargs)
 
         self.data_key = "category_id"
-        self.data_table = "Category"
         self.what_fields_child_fill = ['name']
 
 
 class CityTF(TFWithDrop):
     def __init__(self, **kwargs):
         self.name_ = "city"
+        self.data_table = "City"
         super(CityTF, self).__init__(**kwargs)
 
         self.data_key = "city_id"
-        self.data_table = "City"
         self.what_fields_child_fill = ['name']
 
 
