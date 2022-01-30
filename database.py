@@ -1,6 +1,9 @@
+import os.path
 import sqlite3
 import datetime
 from typing import Optional, Union, Any, Dict, List
+
+from kivy.utils import platform
 from kivymd.color_definitions import colors
 
 
@@ -65,8 +68,13 @@ def take_name_from_db(table: str) -> list:
 
 class ConnDB:
     def __init__(self):
-        with open("referee.db", "a"):
-            with sqlite3.connect("referee.db") as conn:
+        if platform == "android":
+            self.path_db = os.path.join(os.environ["ANDROID_STORAGE"], "emulated", "0", "referee.db")
+        else:
+            self.path_db = os.path.join(os.path.expanduser("~"), "PycharmProjects", "Referee_App", "referee.db")
+
+        with open(self.path_db, "a"):
+            with sqlite3.connect(self.path_db) as conn:
                 cursor = conn.cursor()
                 cursor.execute("""CREATE TABLE IF NOT EXISTS Games (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -94,7 +102,9 @@ class ConnDB:
                 FOREIGN KEY (referee_chief) REFERENCES Referee(id),
                 FOREIGN KEY (referee_first) REFERENCES Referee(id),
                 FOREIGN KEY (referee_second) REFERENCES Referee(id),
-                FOREIGN KEY (referee_reserve) REFERENCES Referee(id)
+                FOREIGN KEY (referee_reserve) REFERENCES Referee(id),
+                CHECK (year > 0 AND month > 0 AND month <= 12 AND day > 0 AND day <= 31
+                 AND game_passed IN (0, 1) AND pay_done IN (0, 1))
                 )""")
                 
                 cursor.execute("""CREATE TABLE IF NOT EXISTS Category (
@@ -117,7 +127,7 @@ class ConnDB:
                 first_name CHAR(30),
                 second_name CHAR(30),
                 third_name CHAR(30),
-                phone INTEGER,
+                phone CHAR(15),
                 category_id INTEGER,
                 FOREIGN KEY (category_id) REFERENCES Category(id)
                 )""")
@@ -161,7 +171,7 @@ class ConnDB:
                         "team_guest_year",
                         )
 
-        sql = f'''SELECT * FROM Games ORDER BY year, month, day ASC, time DESC'''
+        sql = f'''SELECT * FROM Games ORDER BY year DESC, month DESC, day DESC, time ASC'''
 
         games_dict_of_kwargs = []
         return_request = self._select_request(sql)
@@ -184,12 +194,12 @@ class ConnDB:
         if order:
             order_str = self._convert_order(order)
             sql += f''' ORDER BY {order_str}'''
-        # print(sql)
+        # #print(sql)
         return self._select_request(sql, values, one_value=one_value)
 
     def insert(self, table: str, data: dict) -> None:
         """Добавляет в БД заданные данные."""
-        # print(data)
+        # #print(data)
         for k, v in data.items():
             data[k] = int(v) if type(v) == str and v.isdigit() else v
 
@@ -199,7 +209,7 @@ class ConnDB:
 
         sql = f'''INSERT INTO {table}({column}) VALUES ({count_values}); '''
 
-        # print(sql, values)
+        # #print(sql, values)
         self._request(sql, values)
 
     def update(self, table: str, data: dict, conditions: dict):
@@ -218,7 +228,6 @@ class ConnDB:
         else:
             sql = f'''UPDATE {table} SET {column}'''
 
-        print(sql, values)
         self._request(sql, values)
 
     def delete(self, table: str, conditions: dict, columns: list = None):
@@ -233,7 +242,9 @@ class ConnDB:
         else:
             sql = f'''DELETE {columns} FROM {table}'''
 
-        print(sql, values)
+        #print("Delete")
+        #print(sql, values)
+        #print()
         self._request(sql, values)
 
     @staticmethod
@@ -257,9 +268,8 @@ class ConnDB:
         return " AND ".join(name_list), values
 
     def _select_request(self, sql: str, values: Optional[list] = None, one_value: bool = False) -> list:
-        self.cursor = sqlite3.connect('referee.db').cursor()
+        self.cursor = sqlite3.connect(self.path_db).cursor()
         if values:
-            print(sql, values)
             self.cursor.execute(sql, values)
         else:
             self.cursor.execute(sql)
@@ -269,14 +279,16 @@ class ConnDB:
         else:
             data = self.cursor.fetchall()
 
+        #print("Select")
+        #print(sql, values)
+        #print()
         self.cursor.close()
 
         return data
 
     def _request(self, sql, values):
-        self.conn = sqlite3.connect('referee.db')
+        self.conn = sqlite3.connect(self.path_db)
         self.cur = self.conn.cursor()
-        print(sql, values)
         self.cur.execute(sql, values)
         self.conn.commit()
 
@@ -284,9 +296,9 @@ class ConnDB:
 class Game:
     """Класс, определяющий игру из БД."""
     # dict of status icon, color, name
-    status_icn = {"not_passed": ("calendar-alert", colors["Red"]["800"], "Не проведена"),
-                  "passed": ("calendar-check", colors["Yellow"]["300"], "Проведена"),
-                  "pay_done": ("calendar-check", colors["Green"]["700"], "Оплачено"),
+    status_icn = {"not_passed": ("calendar-alert", colors["Red"]["800"], ""),
+                  "passed": ("calendar-check", colors["Yellow"]["300"], ""),
+                  "pay_done": ("calendar-check", colors["Green"]["700"], ""),
                   }
     # list future attribute
     attribute = ("id_in_db",
