@@ -2,10 +2,10 @@
     MDBoxLayout:
         orientation: 'vertical'
         MDToolbar:
-            title: 'App'
+            id: toolbar
+            title: 'Third Referee'
             type: 'top'
             md_bg_color: app.theme_cls.primary_color
-            right_action_items: [["dots-vertical", lambda x: root.menu_settings()]]
 
         MDBottomNavigation:
             panel_color: .5, .5, .5, 1
@@ -21,31 +21,12 @@
                     id: games_box
 
                 MDFloatingActionButton:
+                    id: button_plus
                     rotation_root_button: True
-                    pos_hint: {'center_x': .93, 'center_y': .1}
+                    pos_hint: {'center_x': .9, 'center_y': .18}
                     icon: 'plus'
                     md_bg_color: app.theme_cls.primary_color
                     on_press: root.add_float_button_callback()
-
-            MDBottomNavigationItem:
-                name: 'finance'
-                text: 'Finance'
-                icon: 'cash-usd-outline'
-
-                MDLabel:
-                    text: 'Finance'
-                    halign: 'center'
-
-
-
-            MDBottomNavigationItem:
-                name: 'coming'
-                text: 'python'
-                icon: 'language-python'
-
-                MDLabel:
-                    text: 'Coming soon'
-                    halign: 'center'
 
 <TextField>:
     on_focus: if self.focus: root.on_focus_()

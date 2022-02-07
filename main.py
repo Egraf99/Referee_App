@@ -1,11 +1,9 @@
-import datetime
 import re
-
 from copy import deepcopy
 from abc import abstractmethod
 from math import ceil
 
-from typing import Tuple, Optional
+from typing import Tuple
 
 from kivy.uix.widget import WidgetException
 from kivy.clock import Clock
@@ -28,9 +26,8 @@ from kivymd.uix.behaviors import TouchBehavior
 from kivy.uix.recycleview import RecycleView
 from kivymd.uix.menu import MDDropdownMenu
 from kivymd.app import MDApp
-from kivymd.color_definitions import colors
 
-import database
+from database import *
 
 
 def open_text_dialog(text):
@@ -47,12 +44,12 @@ class Alert(MDDialog):
         self.auto_dismiss = False,
         self.buttons = [MDFlatButton(text='CANCEL', on_release=self.dismiss,
                                      theme_text_color="Custom",
-                                     text_color=app.theme_cls.primary_color,
+                                     text_color=APP.theme_cls.primary_color,
                                      ),
                         MDRectangleFlatButton(text='YES', on_release=self._yes,
                                               theme_text_color="Custom",
-                                              text_color=app.theme_cls.error_color,
-                                              line_color=app.theme_cls.error_color,
+                                              text_color=APP.theme_cls.error_color,
+                                              line_color=APP.theme_cls.error_color,
                                               ),
 
                         ]
@@ -82,9 +79,16 @@ class AppScreen(BoxLayout):
         """Вызывается при нажатии на MDFloatingActionButton."""
         self.games_screen.open_dialog_add_game()
 
-    def menu_settings(self):
-        pass
-        # TODO: сделать меню с изменением стиля, цвета, языка и т.д.
+    def add_back_button(self, action):
+        self.ids.toolbar.left_action_items = [["arrow-left", lambda f: self._back_button_click(action)]]
+
+    def delete_back_button(self):
+        self.ids.toolbar.left_action_items = []
+
+    def _back_button_click(self, action):
+        action()
+        self.delete_back_button()
+        self.ids.toolbar.title = "Third Referee"
 
 
 class GameScreen:
@@ -95,21 +99,35 @@ class GameScreen:
         self.table_games = GamesTable()
 
         # при первом включении необходимо показать контент
-        self._create_main_page()
+        self.show_main_table()
+
+    def show_info_game(self, showed_window):
+        """Open windon with info about game."""
+        # add button in toolbar
+        APP.app_screen.add_back_button(self.show_main_table)
+        APP.app_screen.ids.toolbar.title = "Info"
+
+        self.box.clear_widgets()
+        self.box.add_widget(showed_window)
 
     def open_dialog_add_game(self) -> None:
         """Открывает Dialog для добавления новой игры."""
         self.add_game_dialog = AddDialogWindow(type_="game")
         self.add_game_dialog.open()
 
-    def _create_main_page(self) -> None:
+    def show_main_table(self) -> None:
+        try:
+            APP.app_screen.ids.toolbar.title = "Third Referee"
+            APP.app_screen.delete_back_button()
+        except AttributeError:
+            pass
         self.box.clear_widgets()
+        self.table_games.update()
         self.box.add_widget(self.table_games)
 
 
 class GamesTable(MDDataTable, TouchBehavior):
     """Класс таблицы для отображения записанных в БД игр."""
-    NULL_STR = ""
 
     def __init__(self):
         self.info_dialog = ObjectProperty()
@@ -123,7 +141,7 @@ class GamesTable(MDDataTable, TouchBehavior):
                           "team_home": ('Home team',),
                           "team_guest": ('Guest team',),
                           "referee_chief": ('Referee',),
-                          "status": ('Status', dp(30)),
+                          "status": ('St.', dp(7)),
                           }
 
         self.showed_data = ["date",
@@ -134,14 +152,14 @@ class GamesTable(MDDataTable, TouchBehavior):
 
         # проверка, если в будущем будет несколько таблиц с заданными показываемыми значениями
         # значения showed_data должны состоять из ключей data_dict
-        assert all(map(lambda data: data in database.Game.attribute,
-                       self.showed_data)), "showed_data might be in {Game.attribute}"
+        assert all(map(lambda data: data in Game.attribute,
+                       self.showed_data)), f"showed_data might be in {Game.attribute}"
         # копируем, чтобы при преобразовании имен данных для поиска в БД не изменять показываемые в таблицке дынные
         self.data_for_db = deepcopy(self.showed_data)
 
         self.elevation = 100
         self.rows_num = 10
-        self.use_pagination = False
+        self.use_pagination = True
         self.check = False
         self.column_data = list(map(lambda data: self._set_column_name_and_size(data), self.showed_data))
 
@@ -157,8 +175,11 @@ class GamesTable(MDDataTable, TouchBehavior):
 
             # игра, записанная в данной строке
             game = self.list_of_games[row_cell]
-            self.info_dialog = InfoDialogWindow(type_="game", data_cls=game)
-            self.info_dialog.open()
+            # self.info_dialog = InfoDialogWindow(type_="game", data_cls=game)
+            info_dialog = InfoGameContent(type_="game", data_cls=game)
+            # self.info_dialog.open()
+
+            APP.app_screen.games_screen.show_info_game(info_dialog)
 
     def _set_column_name_and_size(self, data: str):
         if data in self.data_dict:
@@ -182,17 +203,14 @@ class GamesTable(MDDataTable, TouchBehavior):
 
     def _take_games(self) -> list:
         """Возвращает преобразованные в табличные значения данные из БД."""
-        games = database.games()
+        games = MainApp.DB.games
         return_table_data = []
         self.list_of_games = []
 
         for game_info in games:
-            # создаем экземпляры игры по полученным данным
-            game = database.Game(**game_info)
-            self.list_of_games.append(game)
-
-            # преобразуем показываемые данные из атрибутов созданных игр
+            game = Game(**game_info)
             return_table_data.append(self._return_name_data_for_table(game))
+            self.list_of_games.append(game)
 
         return return_table_data
 
@@ -207,22 +225,22 @@ class GamesTable(MDDataTable, TouchBehavior):
 
             elif name_data in ["league", "stadium"]:
                 ls = getattr(game, name_data)
-                data_str = ls.name if ls else self.NULL_STR
+                data_str = take_one_data("name", name_data.title(), {"id": ls.id}) if ls else ""
 
             elif name_data in ["referee_chief", "referee_first", "referee_second", "referee_reserve"]:
-                referee = getattr(game, name_data)
-                data_str = referee.second_name if referee else self.NULL_STR
+                referee = getattr(game, name_data, None)
+                data_str = referee.second_name if referee else ""
 
             elif name_data in ["team_home", "team_guest"]:
                 team = getattr(game, name_data)
-                data_str = team.name if team else self.NULL_STR
+                data_str = take_one_data("name", "Team", {"id": team.id}) if team else ""
 
             elif name_data == "status":
                 data_str = game.status
 
             else:
-                game_attr = getattr(game, name_data)
-                data_str = game_attr if game_attr else self.NULL_STR
+                game_attr = getattr(game, name_data, None)
+                data_str = game_attr if game_attr else ""
 
             returned_list_of_data.append(data_str)
 
@@ -232,7 +250,7 @@ class GamesTable(MDDataTable, TouchBehavior):
 class DialogWindow(MDDialog):
     def __init__(self):
         self.caller_ = None
-        self.auto_dismiss = True
+        self.auto_dismiss = False
         self.type = "custom"
         super(DialogWindow, self).__init__()
 
@@ -254,12 +272,8 @@ class InfoDialogWindow(DialogWindow):
 
         self._set_content_cls(type_, **kwargs)
         self.buttons = [MDFlatButton(text="CANCEL", on_release=self.dismiss, theme_text_color="Custom",
-                                     text_color=app.theme_cls.primary_color),
+                                     text_color=APP.theme_cls.primary_color),
                         ]
-
-        self.size_hint = (None, None)
-        self.width = dp(600)
-        self.height = dp(650)
 
         super(InfoDialogWindow, self).__init__()
 
@@ -277,15 +291,15 @@ class AddDialogWindow(DialogWindow):
                                                             games, referee, stadium, league, category, city, team."""
         type_ = kwargs.pop('type_')
 
-        title = " ".join(['Add', type_])
+        title = " ".join(['Add', type_.replace("_", " ")])
         self.title = title
 
         self._set_content_cls(type_, **kwargs)
         self.buttons = [MDFlatButton(text="CANCEL", on_release=self.dismiss, theme_text_color="Custom",
-                                     text_color=app.theme_cls.primary_color),
+                                     text_color=APP.theme_cls.primary_color),
                         MDRaisedButton(text="ADD",
                                        on_release=self._add_button_click,
-                                       md_bg_color=app.theme_cls.primary_dark)]
+                                       md_bg_color=APP.theme_cls.primary_dark)]
 
         super(AddDialogWindow, self).__init__()
 
@@ -316,12 +330,10 @@ class AddDialogWindow(DialogWindow):
 
 class DialogContent(RecycleView):
     def __init__(self):
-        self.size_hint_y = None
-        self.height = self._get_height()
         super(DialogContent, self).__init__()
 
         self.box = BoxLayout(spacing=dp(10),
-                             orientation='vertical',
+                             orientation="vertical",
                              size_hint_y=None,
                              height=self._get_box_height(),
                              )
@@ -339,16 +351,10 @@ class DialogContent(RecycleView):
     def set_default_box_height(self):
         self.box.height = self.default_box_height
 
-    def _get_height(self):
-        """Устанавливает высоту Content в зависимости от количества items."""
-        height = len(self.items) * 70
-        height = 400 if height > 400 else height
-        return dp(height)
-
     def _get_box_height(self):
         """Устанавливает высоту BoxLayout в зависимости от количества items и их заданной высоты."""
         # высота item, если она не указана
-        self.default_item_height = getattr(self, "default_item_height", 62)
+        self.default_item_height = getattr(self, "default_item_height", 63)
         self.default_box_height = self._get_items_height(len(self.items))
 
         return dp(self.default_box_height)
@@ -486,7 +492,7 @@ class DialogContent(RecycleView):
     def _add_label(self, box: Layout, instr: dict):
         colored = {}
         if instr.pop('colored', False):
-            colored = {'theme_text_color': "Custom", 'text_color': app.theme_cls.primary_color}
+            colored = {'theme_text_color': "Custom", 'text_color': APP.theme_cls.primary_color}
             # TODO: добавить выбор цветов для надписи
 
         self._add_widget(MDLabel(text=instr.pop('text', ''),
@@ -498,8 +504,8 @@ class DialogContent(RecycleView):
     def _add_button(self, type_, box, instr: dict):
         if type_ == "delete_game":
             self._add_widget(MDRectangleFlatButton(text=instr.pop('text', ''),
-                                                   text_color=app.theme_cls.error_color,
-                                                   line_color=app.theme_cls.error_color,
+                                                   text_color=APP.theme_cls.error_color,
+                                                   line_color=APP.theme_cls.error_color,
                                                    on_release=self.delete_click
                                                    ),
                              box, add_in_children=False)
@@ -538,8 +544,9 @@ class InfoDialogContent(DialogContent):
         caller.parent.parent.click_add()
 
     def bool_update_db(self, checkbox, value):
-        database.update('Games', {checkbox.data_key: value}, {'id': self.game.id_in_db})
-        app.app_screen.games_screen.table_games.update()
+        data = 1 if value else 0
+        MainApp.DB.update('Games', {checkbox.data_key: data}, {'id': self.game.id_in_db})
+        APP.app_screen.games_screen.table_games.update()
 
     def show_year(self, value):
         if value:
@@ -548,7 +555,7 @@ class InfoDialogContent(DialogContent):
                 {'class': 'label', 'size_hint_x': 0.1},
                 {'name': 'T.H. year', 'class': 'label_with_change', 'type': 'year', 'data_key': 'team_home_year',
                  'halign': 'center', 'size_hint_x': 1.7},
-                {'class': 'label', 'text': 'y.o.', 'size_hint_x': 0.11, 'halign': 'center'},
+                {'class': 'label', 'text': 'yo', 'size_hint_x': 0.11, 'halign': 'center'},
                 {'name': 'T.G. year', 'class': 'label_with_change', 'type': 'year', 'data_key': 'team_guest_year',
                  'halign': 'center', 'size_hint_x': 0.3},
             ]
@@ -561,9 +568,8 @@ class InfoDialogContent(DialogContent):
         Alert("Are you sure?", self.delete_game).open()
 
     def delete_game(self, _=None):
-        database.delete('Games', {'id': self.game.id_in_db})
-        self.parent.parent.parent.dismiss()
-        app.app_screen.games_screen.table_games.update()
+        MainApp.DB.delete('Games', {'id': self.game.id_in_db})
+        APP.app_screen.games_screen.show_main_table()
 
     def _reformat_items(self, box):
         self._clear_empty_box(box)
@@ -590,7 +596,15 @@ class AddDialogContent(DialogContent):
         filled_field = kwargs.pop('filled_field', {})
 
         super(AddDialogContent, self).__init__()
+        self.size_hint_y = None
+        self.height = self._get_height()
         self._filled_children_field(filled_field)
+
+    def _get_height(self):
+        """Устанавливает высоту Content в зависимости от количества items."""
+        height = len(self.items) * 70
+        height = 400 if height > 400 else height
+        return dp(height)
 
     def _filled_children_field(self, filled_field: dict):
         for widget in self.children_:
@@ -612,7 +626,9 @@ class AddDialogContent(DialogContent):
         for child in children:
             if isinstance(child, TextField):
                 data_, cft, required_not_fill = self._check_text_fields(child)
-                if data_:
+                if data_ is False:
+                    return False
+                else:
                     data.update(data_)
                 if cft:
                     caller_field_text = " ".join([caller_field_text, cft])
@@ -627,27 +643,17 @@ class AddDialogContent(DialogContent):
             open_text_dialog(f"The fields:\n{not_filled}\n is not filled on")
             return False
 
-        try:
-            # заменяем два ключа date и time на один datetime
-            data.update(
-                {"datetime": datetime.datetime.strptime(  # создаем объект datetime
-                    data.pop("date") + data.pop("time"),  # конкатенация строк даты и времени
-                    "%d.%m.%Y%H:%M")})  # format
-        except KeyError:
-            pass
+        MainApp.DB.insert(self.data_table, data)
 
-        database.insert(self.data_table, data)
-        print("INSERT\n\t", self.data_table, data)
         # self.parent - BoxLayout, self.parent.parent - MDCard, self.parent.parent.parent - DialogWindow
         self.parent.parent.parent.dismiss()
 
         if not self.caller_:
             open_text_dialog("Successfully added")
-            app.app_screen.games_screen.table_games.update()
+            APP.app_screen.games_screen.table_games.update()
 
         else:
             self.caller_.text = caller_field_text.strip()
-            self.caller_.update_items()
             open_snackbar(f"{self.caller_.hint_text.title()} {self.caller_.text} successfully added")
 
         return True
@@ -673,7 +679,7 @@ class AddDialogContent(DialogContent):
                 break
 
     @staticmethod
-    def _check_text_fields(field) -> Tuple[dict, Optional[str], bool]:
+    def _check_text_fields(field) -> Tuple[Union[dict, bool], Optional[str], bool]:
         """Анализирует field и возвращает его данные.
 
             Parameter:
@@ -686,6 +692,7 @@ class AddDialogContent(DialogContent):
                                         который будет записан из этого field в родительское field.
                 required_not_fill(bool) - заполненно ли field (только если field обязательно заполняется)."""
 
+        data = None
         # запоминает текст из полей, данные из которых будут записаны в вызывающем родительском поле
         caller_field_text = field.text if field.add_text_in_parent else None
 
@@ -693,7 +700,12 @@ class AddDialogContent(DialogContent):
         required_not_fill = field.required_not_fill()
 
         # записывающиеся в БД данные
-        data = field.return_data() if field.text else None
+        if field.text:
+            data = field.return_data()
+            if not data:
+                return False, None, False
+
+        data = data if data else {}
 
         return data, caller_field_text, required_not_fill
 
@@ -721,16 +733,10 @@ class InfoGameContent(InfoDialogContent):
                 {'class': 'checkbox', 'type': 'info', 'data_key': 'pay_done', 'size_hint_x': 0.1},
                 {'class': 'label', 'text': 'Pay done', 'size_hint_x': 0.3, 'colored': True},
             ),
-            (
-                {'class': 'boxlayout', 'orientation': 'horizontal', 'spacing': 10},
-                {'name': 'Date', 'class': 'label_with_change', 'type': 'date'},
-                {'name': 'Time', 'class': 'label_with_change', 'type': 'time'},
-            ),
-            (
-                {'class': 'boxlayout', 'orientation': 'horizontal', 'spacing': 10},
-                {'name': 'Stadium', 'class': 'label_with_change', 'type': 'stadium'},
-                {'name': 'Salary', 'class': 'label_with_change', 'type': 'payment', 'data_key': 'payment'}
-            ),
+            {'name': 'Date', 'class': 'label_with_change', 'type': 'date'},
+            {'name': 'Time', 'class': 'label_with_change', 'type': 'time'},
+            {'name': 'Stadium', 'class': 'label_with_change', 'type': 'stadium'},
+            {'name': 'Salary', 'class': 'label_with_change', 'type': 'payment', 'data_key': 'payment'},
             (
                 {'class': 'boxlayout', 'orientation': 'horizontal', 'spacing': 10},
                 {'name': 'T. home', 'class': 'label_with_change', 'type': 'team', 'data_key': 'team_home',
@@ -753,40 +759,36 @@ class InfoGameContent(InfoDialogContent):
 
 class AddGameContent(AddDialogContent):
     def __init__(self):
-        self.data_table = "Games"
+        self.data_table = "games"
         self.items = (
             (
                 {'class': 'boxlayout', 'orientation': 'horizontal', 'spacing': 10},
                 {'name': 'Date', 'class': 'textfield', 'type': 'date', 'notnull': True, 'size_hint_x': 0.5},
                 {'name': 'Time', 'class': 'textfield', 'type': 'time', 'notnull': True, 'size_hint_x': 0.5},
-                {'name': 'Stadium', 'class': 'textfield', 'type': 'stadium', 'notnull': True},
             ),
+            {'name': 'Stadium', 'class': 'textfield', 'type': 'stadium', 'notnull': True},
             {'name': 'Chief referee', 'class': 'textfield', 'type': 'referee', 'data_key': 'referee_chief',
              'notnull': True},
             (
-                {'class': 'expansionpanel', 'name': 'Team', 'cols': 2},
-                (
-                    {'name': 'Home team', 'class': 'textfield', 'type': 'team', 'data_key': 'team_home'},
-                    {'name': 'Age home team', 'class': 'textfield', 'type': 'age', 'data_key': 'team_home_year',
-                     'size_hint_x': 0.35},
-
-                ),
-                (
-                    {'name': 'Guest team', 'class': 'textfield', 'type': 'team', 'data_key': 'team_guest'},
-                    {'name': 'Age guest team', 'class': 'textfield', 'type': 'age', 'data_key': 'team_guest_year',
-                     'size_hint_x': 0.35}
-                ),
-                {'name': 'League', 'class': 'textfield', 'type': 'league', 'size_hint_x': 0.8},
+                {'class': 'boxlayout', 'orientation': 'horizontal', 'spacing': 10},
+                {'name': 'Home team', 'class': 'textfield', 'type': 'team', 'data_key': 'team_home'},
+                {'name': 'Age', 'class': 'textfield', 'type': 'age', 'data_key': 'team_home_year',
+                 'size_hint_x': 0.35},
             ),
             (
-                {'class': 'expansionpanel', 'name': 'Referee'},
-                {'name': 'First referee', 'class': 'textfield', 'type': 'referee',
-                 'data_key': 'referee_first'},
-                {'name': 'Second referee', 'class': 'textfield', 'type': 'referee',
-                 'data_key': 'referee_second'},
-                {'name': 'Reserve referee', 'class': 'textfield', 'type': 'referee',
-                 'data_key': 'referee_reserve'}
+                {'class': 'boxlayout', 'orientation': 'horizontal', 'spacing': 10},
+                {'name': 'Guest team', 'class': 'textfield', 'type': 'team', 'data_key': 'team_guest'},
+                {'name': 'Age', 'class': 'textfield', 'type': 'age', 'data_key': 'team_guest_year',
+                 'size_hint_x': 0.35}
             ),
+            {'name': 'League', 'class': 'textfield', 'type': 'league', 'size_hint_x': 0.8},
+            # {'class': 'expansionpanel', 'name': 'Referee'},
+            {'name': 'First referee', 'class': 'textfield', 'type': 'referee',
+             'data_key': 'referee_first'},
+            {'name': 'Second referee', 'class': 'textfield', 'type': 'referee',
+             'data_key': 'referee_second'},
+            {'name': 'Reserve referee', 'class': 'textfield', 'type': 'referee',
+             'data_key': 'referee_reserve'},
             (
                 {'class': 'boxlayout', 'orientation': 'horizontal', 'spacing': 10},
                 {'class': 'checkbox', 'type': 'add', 'data_key': 'game_passed', 'size_hint_x': 0.1},
@@ -807,7 +809,7 @@ class AddGameContent(AddDialogContent):
 
 class AddRefereeContent(AddDialogContent):
     def __init__(self, **kwargs):
-        self.data_table = "Referee"
+        self.data_table = "referee"
         self.items = (
             {'name': 'Second name', 'class': 'textfield', 'data_key': 'second_name', 'notnull': True,
              'add_text_in_parent': True},
@@ -822,7 +824,7 @@ class AddRefereeContent(AddDialogContent):
 
 class AddStadiumContent(AddDialogContent):
     def __init__(self, **kwargs):
-        self.data_table = "Stadium"
+        self.data_table = "stadium"
         self.items = (
             {'name': 'Name', 'class': 'textfield', 'data_key': 'name', 'notnull': True, 'add_text_in_parent': True},
             {'name': 'City', 'class': 'textfield', 'type': 'city', 'notnull': True},
@@ -834,36 +836,40 @@ class AddStadiumContent(AddDialogContent):
 
 class AddLeagueContent(AddDialogContent):
     def __init__(self, **kwargs):
-        self.data_table = "League"
+        self.data_table = "league"
         self.items = (
-            {'name': 'Name', 'class': 'textfield', 'data_key': 'name', 'notnull': True, 'add_text_in_parent': True})
+            {'name': 'Name', 'class': 'textfield', 'data_key': 'name', 'notnull': True, 'add_text_in_parent': True},
+        )
 
         super(AddLeagueContent, self).__init__(**kwargs)
 
 
 class AddTeamContent(AddDialogContent):
     def __init__(self, **kwargs):
-        self.data_table = "Team"
+        self.data_table = "team"
         self.items = (
-            {'name': 'Name', 'class': 'textfield', 'data_key': 'name', 'notnull': True, 'add_text_in_parent': True})
+            {'name': 'Name', 'class': 'textfield', 'data_key': 'name', 'notnull': True, 'add_text_in_parent': True},
+        )
 
         super(AddTeamContent, self).__init__(**kwargs)
 
 
 class AddCategoryContent(AddDialogContent):
     def __init__(self, **kwargs):
-        self.data_table = "Category"
+        self.data_table = "category"
         self.items = (
-            {'name': 'Name', 'class': 'textfield', 'data_key': 'name', 'notnull': True, 'add_text_in_parent': True})
+            {'name': 'Name', 'class': 'textfield', 'data_key': 'name', 'notnull': True, 'add_text_in_parent': True},
+        )
 
         super(AddCategoryContent, self).__init__(**kwargs)
 
 
 class AddCityContent(AddDialogContent):
     def __init__(self, **kwargs):
-        self.data_table = "City"
+        self.data_table = "city"
         self.items = (
-            {'name': 'Name', 'class': 'textfield', 'data_key': 'name', 'notnull': True, 'add_text_in_parent': True})
+            {'name': 'Name', 'class': 'textfield', 'data_key': 'name', 'notnull': True, 'add_text_in_parent': True},
+        )
 
         super(AddCityContent, self).__init__(**kwargs)
 
@@ -959,9 +965,10 @@ class TextField(MDTextField):
     def __repr__(self):
         return f"{__class__.__name__} of {self.hint_text!r}"
 
-    def check_input(self) -> bool:
+    def check_input(self):
         """Проверяет введеный текст."""
         if not re.match(self.check_pattern, self.text):
+            self.text = ""
             return False
         return True
 
@@ -999,13 +1006,15 @@ class TFWithDrop(TextField):
         super(TFWithDrop, self).__init__(**kwargs)
         self.add_data_dialog = ObjectProperty()
         self.have_drop_menu = True
-        self.items = database.take_name_order(self.data_table)
 
         assert hasattr(self, "name_"), "TFWithDrop must have attribute 'name_'"
         self.drop_menu = DropMenu(parent_=self)
 
-    def update_items(self):
-        self.items = database.take_name_order(self.data_table)
+        self.items = None
+        self._update_items()
+
+    def _update_items(self):
+        self.items = take_name_from_db(self.data_table)
 
     def add_item_in_text_input(self, text_item):
         self.text = text_item
@@ -1018,7 +1027,7 @@ class TFWithDrop(TextField):
         self.drop_menu.caller = self
 
         # берем текст вызывающего поля ввода для определения строк в всплывающем меню
-        items = database.take_name_order(self.data_table)
+        items = take_name_from_db(self.data_table)
         self.drop_menu.set_items(self, [i[0] for i in items])
 
         if items:
@@ -1057,16 +1066,16 @@ class TFWithDrop(TextField):
         """При нажатии кнопки Enter вводит текст первого item в строку или открывает меню добавления, если item'ов
         нет."""
         text_dropmenu = self.drop_menu.items[0]["text"]
+        self.drop_menu.dismiss()
 
         if text_dropmenu.split()[0] == "Add":
             self.drop_menu_add_data()
             self.text = ''
-
         else:
             self.text = text_dropmenu
+            self._update_items()
+            super(TFWithDrop, self).on_text_validate()
 
-        self.drop_menu.dismiss()
-        super(TFWithDrop, self).on_text_validate()
 
     def _make_dict_filled_field_in_children(self) -> dict:
         """Создает словарь заволненных полей.
@@ -1108,11 +1117,12 @@ class TFWithDrop(TextField):
                 continue
 
         # запрашивает id исходя из условий
-        try:
-            id_ = database.take_id_by_condition(self.data_table, conditions_dict)
+        id_ = take_one_data("id", self.data_table, conditions_dict)
+        if id_ is not None:
             return {self.data_key: id_}
-        except TypeError:
+        else:
             open_text_dialog(f'Name "{self.text}" is not found in the table {self.data_table.capitalize()}')
+            return False
 
 
 class TFWithoutDrop(TextField):
@@ -1169,10 +1179,8 @@ class PhoneTF(TFWithoutDrop):
         super(PhoneTF, self).do_backspace(from_undo=from_undo, mode='bkspc')
 
     def on_text_validate(self):
-        if self.check_input():
-            super(PhoneTF, self).on_text_validate()
-        else:
-            self.text = ""
+        self.check_input()
+        super(PhoneTF, self).on_text_validate()
 
     def return_data_(self):
         digits = re.sub("\D", "", self.text)
@@ -1209,13 +1217,17 @@ class DateTF(TFWithoutDrop):
         super(DateTF, self).do_backspace(from_undo=from_undo, mode='bkspc')
 
     def on_text_validate(self):
-        if self.check_input():
-            super(DateTF, self).on_text_validate()
-        else:
-            self.text = ""
+        self.check_input()
+        super(DateTF, self).on_text_validate()
 
     def return_data_(self):
-        return {"date": self.text}
+        day, month, year = map(lambda text: re.sub("\D", "", text), self.text.split("."))
+        _data = {'day': int(day), 'month': int(month), 'year': int(year)}
+        date = {}
+        for i in _data:
+            date[i] = _data[i]
+
+        return date
 
 
 class TimeTF(TFWithoutDrop):
@@ -1223,7 +1235,7 @@ class TimeTF(TFWithoutDrop):
         super(TimeTF, self).__init__(**kwargs)
 
         self.name_ = self.data_key = 'time'
-        self.check_pattern = "^([01][1-9]|2[0-4]):[0-6][0-9]$"
+        self.check_pattern = "^([01][0-9]|2[0-4]):[0-5][0-9]$"
         self.helper_text = "HH:MM"
         self.helper_text_mode = "persistent"
 
@@ -1248,13 +1260,12 @@ class TimeTF(TFWithoutDrop):
         super(TimeTF, self).do_backspace(from_undo=from_undo, mode='bkspc')
 
     def on_text_validate(self):
-        if self.check_input():
-            super(TimeTF, self).on_text_validate()
-        else:
-            self.text = ""
+        self.check_input()
+        super(TimeTF, self).on_text_validate()
 
     def return_data_(self):
-        return {"time": self.text}
+        digits = re.sub("\D", "", self.text)
+        return {self.data_key: int(digits)}
 
 
 class YearTF(TFWithoutDrop):
@@ -1272,10 +1283,8 @@ class YearTF(TFWithoutDrop):
         return super(YearTF, self).insert_text(substring, from_undo=from_undo)
 
     def on_text_validate(self):
-        if self.check_input():
-            super(YearTF, self).on_text_validate()
-        else:
-            self.text = ""
+        self.check_input()
+        super(YearTF, self).on_text_validate()
 
 
 class StadiumTF(TFWithDrop):
@@ -1358,7 +1367,7 @@ class MyCheckBox(CheckBox):
         self.name_ = self.data_key = kwargs.pop("data_key")
         self.size_hint_x = kwargs.pop('size_hint_x', 1)
         self.bind(active=self.on_checkbox_active)
-        # self.color = app.theme_cls.primary_color
+        # self.color = APP.theme_cls.primary_color
 
         super(MyCheckBox, self).__init__(**kwargs)
 
@@ -1432,16 +1441,16 @@ class LabelWithChange(BoxLayout, TouchBehavior):
         self.label_box = BoxLayout(orientation='horizontal')
         if not without_label:
             self.label_name = MDLabel(text=f"{self.name_}: ",
-                                      halign='left',
+                                      halign="left",
                                       size_hint_x=None,
                                       # width=self._get_width_from_len(f"{self.name_}: "),
                                       theme_text_color="Custom",
-                                      text_color=app.theme_cls.primary_color,
+                                      text_color=APP.theme_cls.primary_color,
                                       )
             self.label_box.add_widget(self.label_name)
 
         self.label_value = MDLabel(text=f"{self.value}",
-                                   halign='left',
+                                   halign="left",
                                    )
 
         self.label_box.add_widget(self.label_value)
@@ -1489,10 +1498,6 @@ class LabelWithChange(BoxLayout, TouchBehavior):
         self.change_mode("change")
         self.text_field.text = ''
 
-    def on_double_tap(self, touch, *args):
-        if self.mode == "change":
-            print('yre')
-
     def change_mode(self, mode: str):
         assert mode in ["change", "view"]
         self.clear_widgets()
@@ -1514,13 +1519,14 @@ class LabelWithChange(BoxLayout, TouchBehavior):
         self.change_mode("change")
 
     def click_add(self, _=None):
-        if not self.text_field.check_input() or all([self.text_field.required, not self.text_field.text]):
-            self.text_field.text = ''
+        self.text_field.check_input()
+        if all([self.text_field.required, not self.text_field.text]):
+            self.text_field.text = ""
         else:
-            database.update("Games", self.text_field.return_data(), {"id": self.game.id_in_db})
+            MainApp.DB.update("Games", self.text_field.return_data(), {"id": self.game.id_in_db})
             self.label_value.text = self.text_field.text
-            self.change_mode('view')
-            app.app_screen.games_screen.table_games.update()
+            self.change_mode("view")
+            APP.app_screen.games_screen.table_games.update()
 
     def click_cancel(self, _=None):
         self.change_mode("view")
@@ -1565,7 +1571,7 @@ class TeamLWC(LabelWithChange):
         team = getattr(self.game, kwargs.pop('data_key'))
         self.value = team.name if team and team.name else ''
         self.show(without_label=True)
-        self.label_value.halign = kwargs.pop('halign', 'left')
+        self.label_value.halign = kwargs.pop('halign', "left")
 
 
 class YearLWC(LabelWithChange):
@@ -1596,8 +1602,10 @@ class PaymentLWC(LabelWithChange):
 
 
 class MainApp(MDApp):
+    DB = ConnDB()
+
     def build(self):
-        self.theme_cls.primary_palette = "Orange"
+        self.theme_cls.primary_palette = "Green"
         self.theme_cls.primary_hue = "800"
         self.theme_cls.primary_darkhue = "900"
         self.theme_cls.primary_lighthue = "300"
@@ -1609,6 +1617,8 @@ class MainApp(MDApp):
         return self.app_screen
 
 
+APP = MainApp()
+
+
 if __name__ in ("__android__", "__main__"):
-    app = MainApp()
-    app.run()
+    APP.run()
